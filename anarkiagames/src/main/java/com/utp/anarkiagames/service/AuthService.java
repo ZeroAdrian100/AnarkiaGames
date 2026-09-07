@@ -3,6 +3,7 @@
     import com.utp.anarkiagames.controller.LoginRequest;
     import com.utp.anarkiagames.controller.RegisterRequest;
     import com.utp.anarkiagames.controller.TokenResponse;
+    import com.utp.anarkiagames.model.Role;
     import com.utp.anarkiagames.model.User;
     import com.utp.anarkiagames.repository.UserRepository;
     import lombok.RequiredArgsConstructor;
@@ -26,7 +27,7 @@
                     .nombre(request.name())
                     .email(request.email())
                     .passwordHash(passwordEncoder.encode(request.password()))
-                    .role("USER")
+                    .role(Role.CLIENTE)
                     .build();
             var savedUser = userRepository.save(user);
             var jwtToken = jwtService.generateToken(savedUser);
