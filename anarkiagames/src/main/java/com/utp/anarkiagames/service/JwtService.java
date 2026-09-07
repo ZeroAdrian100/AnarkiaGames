@@ -36,10 +36,14 @@ public class JwtService {
     public String generateRefreshToken(final User user){
         return buildToken(user, refreshExpiration);
     }
+
     private String buildToken(final User user, final long expiration){
         return Jwts.builder()
                 .id(user.getID().toString())
-                .claims(Map.of("name", user.getNombre()))
+                .claims(Map.of(
+                        "name", user.getNombre(),
+                        "role", user.getRole().name()
+                ))
                 .subject(user.getEmail())
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis()+expiration))
