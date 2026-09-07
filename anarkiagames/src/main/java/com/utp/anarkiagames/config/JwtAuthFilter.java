@@ -39,17 +39,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             response.setStatus(HttpServletResponse.SC_OK);
             return;
         }
-        if (request.getServletPath().contains("/auth") || request.getServletPath().contains("/chat")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        if (request.getServletPath().contains("/auth")
-                || request.getServletPath().contains("/chat")
-                || request.getServletPath().contains("/webhooks")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
 
         if (request.getServletPath().contains("/auth")) {
             filterChain.doFilter(request, response);

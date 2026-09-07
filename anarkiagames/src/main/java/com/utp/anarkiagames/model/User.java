@@ -17,7 +17,7 @@ import java.util.List;
 @AllArgsConstructor
 @Entity
 @Table(name = "users")
-public class User {
+public class User implements UserDetails{
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long ID;
@@ -34,7 +34,36 @@ public class User {
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    private String role;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Role role;
 
-
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities(){
+        return List.of(new SimpleGrantedAuthority("ROLE_"+role.name()));
+    }
+    @Override
+    public String getPassword(){
+        return passwordHash;
+    }
+    @Override
+    public String getUsername(){
+        return email;
+    }
+    @Override
+    public boolean isAccountNonExpired(){
+        return true;
+    }
+    @Override
+    public boolean isAccountNonLocked(){
+        return true;
+    }
+    @Override
+    public boolean isCredentialsNonExpired(){
+        return true;
+    }
+    @Override
+    public boolean isEnabled(){
+        return true;
+    }
 }

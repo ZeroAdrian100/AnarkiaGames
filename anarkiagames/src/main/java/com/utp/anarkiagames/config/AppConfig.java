@@ -1,6 +1,6 @@
 package com.utp.anarkiagames.config;
 
-import com.utp.anarkiagames.model.User;
+
 import com.utp.anarkiagames.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -22,14 +22,8 @@ public class AppConfig {
 
     @Bean
     public UserDetailsService userDetailsService(){
-        return username -> {
-            final User user = repository.findByEmail(username)
-                    .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-            return org.springframework.security.core.userdetails.User.builder()
-                    .username(user.getEmail())
-                    .password(user.getPasswordHash())
-                    .build();
-        };
+        return username -> repository.findByEmail(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + username));
     }
 
     @Bean
