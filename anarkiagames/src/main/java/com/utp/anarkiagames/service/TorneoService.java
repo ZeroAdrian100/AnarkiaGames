@@ -25,13 +25,10 @@ public class TorneoService {
                 .fechaInicio(request.fechaInicio())
                 .build();
 
-        final Torneo savedTorneo = torneoRepository.save(torneo);
+        final Torneo guardado = torneoRepository.save(torneo);
 
         return new TorneoResponse(
-                savedTorneo.getId(),
-                savedTorneo.getNombre(),
-                savedTorneo.getJuego(),
-                savedTorneo.getFechaInicio());
+                guardado.getId(), guardado.getNombre(), guardado.getJuego(), guardado.getFechaInicio());
     }
 
     public List<TorneoResponse> listar(){
