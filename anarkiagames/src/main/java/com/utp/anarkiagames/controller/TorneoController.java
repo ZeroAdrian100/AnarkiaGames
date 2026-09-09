@@ -5,15 +5,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
-@RequestMapping("/admin/torneos")
+@RequestMapping("/torneos")
 @RequiredArgsConstructor
 public class TorneoController {
     private final TorneoService service;
 
-    @PostMapping
-    public ResponseEntity<TorneoResponse> crear(@RequestBody final TorneoRequest request){
-        final TorneoResponse response = service.crear(request);
-        return ResponseEntity.ok(response);
+    @GetMapping
+    public ResponseEntity<List<TorneoResponse>> listar(){
+        return ResponseEntity.ok(service.listar());
+    }
+
+    @GetMapping("/{torneoId}")
+    public ResponseEntity<TorneoDetalleResponse> obtener(@PathVariable final Long torneoId){
+        return ResponseEntity.ok(service.obtener(torneoId));
     }
 }
