@@ -28,4 +28,7 @@ public class Inscripcion {
 
     @Column(name = "fecha_compra", nullable = false)
     private LocalDateTime fechaCompra;
+
+    @Column(name = "culqi_charge_id")
+    private String culqiChargeId;
 }

@@ -9,6 +9,8 @@ import com.utp.anarkiagames.model.User;
 import com.utp.anarkiagames.repository.InscripcionRepository;
 import com.utp.anarkiagames.repository.TipoTicketRepository;
 import com.utp.anarkiagames.repository.TorneoRepository;
+import com.utp.anarkiagames.service.payment.PaymentGateway;
+import com.utp.anarkiagames.service.payment.PaymentResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,8 +22,9 @@ public class InscripcionService {
     private final InscripcionRepository inscripcionRepository;
     private final TipoTicketRepository tipoTicketRepository;
     private final TorneoRepository torneoRepository;
+    private final PaymentGateway paymentGateway;
 
-    public InscripcionResponse comprar(final long torneoId, final InscripcionRequest request, final User usuario){
+    public InscripcionResponse comprar(final Long torneoId, final InscripcionRequest request, final User usuario) throws Exception {
         final Torneo torneo = torneoRepository.findById(torneoId)
                 .orElseThrow(()-> new IllegalArgumentException("Torneo no encontrado"));
 
@@ -32,19 +35,36 @@ public class InscripcionService {
         inscripcionRepository.findByUsuarioAndTipoTicket(usuario, tipoTicket)
                 .ifPresent(i -> { throw new IllegalStateException("Ya tienes un ticket de este tipo para este torneo"); });
 
+        final long vendidos = inscripcionRepository.countByTipoTicket(tipoTicket);
+        if(vendidos >= tipoTicket.getStockMaximo()){
+            throw new IllegalStateException("No hay mas tickets disponibles para "+request.tipo());
+        }
+
+        final PaymentResult resultado = paymentGateway.cobrar(
+                request.tokenId(),
+                tipoTicket.getPrecio(),
+                usuario.getEmail(),
+                "Ticket " + request.tipo() + " - " + torneo.getNombre()
+        );
+
+        if (!resultado.exitoso()) {
+            throw new IllegalStateException("Pago rechazado: " + resultado.mensajeError());
+        }
+
         final Inscripcion inscripcion = Inscripcion.builder()
                 .usuario(usuario)
                 .tipoTicket(tipoTicket)
                 .fechaCompra(LocalDateTime.now())
+                .culqiChargeId(resultado.referenciaId())
                 .build();
 
-        final Inscripcion savedinscripcion = inscripcionRepository.save(inscripcion);
+        final Inscripcion guardada = inscripcionRepository.save(inscripcion);
 
         return new InscripcionResponse(
-                savedinscripcion.getId(),
+                guardada.getId(),
                 torneo.getId(),
                 tipoTicket.getTipo(),
-                savedinscripcion.getFechaCompra()
+                guardada.getFechaCompra()
         );
     }
 }
