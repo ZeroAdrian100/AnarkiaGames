@@ -4,6 +4,7 @@ import com.utp.anarkiagames.controller.TipoTicketResponse;
 import com.utp.anarkiagames.controller.TorneoDetalleResponse;
 import com.utp.anarkiagames.controller.TorneoRequest;
 import com.utp.anarkiagames.controller.TorneoResponse;
+import com.utp.anarkiagames.exception.RecursoNoEncontradoException;
 import com.utp.anarkiagames.model.Torneo;
 import com.utp.anarkiagames.repository.TipoTicketRepository;
 import com.utp.anarkiagames.repository.TorneoRepository;
@@ -39,7 +40,7 @@ public class TorneoService {
 
     public TorneoDetalleResponse obtener(final Long torneoId){
         final Torneo torneo = torneoRepository.findById(torneoId)
-                .orElseThrow(() -> new IllegalArgumentException("Torneo no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Torneo no encontrado"));
 
         final List<TipoTicketResponse> tiposTicket = tipoTicketRepository.findByTorneo(torneo).stream()
                 .map(tt -> new TipoTicketResponse(

@@ -2,6 +2,8 @@ package com.utp.anarkiagames.service;
 
 import com.utp.anarkiagames.controller.TipoTicketRequest;
 import com.utp.anarkiagames.controller.TipoTicketResponse;
+import com.utp.anarkiagames.exception.ConflictoException;
+import com.utp.anarkiagames.exception.RecursoNoEncontradoException;
 import com.utp.anarkiagames.model.TipoTicket;
 import com.utp.anarkiagames.model.Torneo;
 import com.utp.anarkiagames.repository.TipoTicketRepository;
@@ -17,10 +19,10 @@ public class TipoTicketService {
 
     public TipoTicketResponse crear(final Long torneoId, final TipoTicketRequest request){
         final Torneo torneo = torneoRepository.findById(torneoId)
-                .orElseThrow(()-> new IllegalArgumentException("Torneo no encontrado"));
+                .orElseThrow(()-> new RecursoNoEncontradoException("Torneo no encontrado"));
 
         tipoTicketRepository.findByTorneoAndTipo(torneo, request.tipo())
-                .ifPresent(t -> { throw new IllegalStateException(
+                .ifPresent(t -> { throw new ConflictoException(
                         "Ya existe un tipo de ticket " + request.tipo() + " para este torneo"); });
         final TipoTicket tipoTicket = TipoTicket.builder()
                 .torneo(torneo)

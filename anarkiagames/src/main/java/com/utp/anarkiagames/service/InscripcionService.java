@@ -2,6 +2,7 @@ package com.utp.anarkiagames.service;
 
 import com.utp.anarkiagames.controller.InscripcionRequest;
 import com.utp.anarkiagames.controller.InscripcionResponse;
+import com.utp.anarkiagames.exception.*;
 import com.utp.anarkiagames.model.Inscripcion;
 import com.utp.anarkiagames.model.TipoTicket;
 import com.utp.anarkiagames.model.Torneo;
@@ -26,18 +27,18 @@ public class InscripcionService {
 
     public InscripcionResponse comprar(final Long torneoId, final InscripcionRequest request, final User usuario) throws Exception {
         final Torneo torneo = torneoRepository.findById(torneoId)
-                .orElseThrow(()-> new IllegalArgumentException("Torneo no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Torneo no encontrado"));
 
         final TipoTicket tipoTicket = tipoTicketRepository.findByTorneoAndTipo(torneo, request.tipo())
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new RecursoNoEncontradoException(
                         "No hay tickets de tipo " + request.tipo() + " configurados para este torneo"));
 
         inscripcionRepository.findByUsuarioAndTipoTicket(usuario, tipoTicket)
-                .ifPresent(i -> { throw new IllegalStateException("Ya tienes un ticket de este tipo para este torneo"); });
+                .ifPresent(i -> { throw new ConflictoException("Ya tienes un ticket de este tipo para este torneo"); });
 
         final long vendidos = inscripcionRepository.countByTipoTicket(tipoTicket);
-        if(vendidos >= tipoTicket.getStockMaximo()){
-            throw new IllegalStateException("No hay mas tickets disponibles para "+request.tipo());
+        if (vendidos >= tipoTicket.getStockMaximo()) {
+            throw new ConflictoException("No hay más cupos disponibles para " + request.tipo());
         }
 
         final PaymentResult resultado = paymentGateway.cobrar(
@@ -48,7 +49,7 @@ public class InscripcionService {
         );
 
         if (!resultado.exitoso()) {
-            throw new IllegalStateException("Pago rechazado: " + resultado.mensajeError());
+            throw new PagoRechazadoException("Pago rechazado: " + resultado.mensajeError());
         }
 
         final Inscripcion inscripcion = Inscripcion.builder()
