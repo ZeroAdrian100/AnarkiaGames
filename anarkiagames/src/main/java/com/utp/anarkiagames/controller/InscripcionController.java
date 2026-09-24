@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 
 @RestController
 @RequestMapping("/torneos")
@@ -21,5 +23,9 @@ public class InscripcionController {
             @AuthenticationPrincipal final User usuario)throws Exception{
         final InscripcionResponse response = service.comprar(torneoId, request, usuario);
         return ResponseEntity.ok(response);
+    }
+    @GetMapping("/mis-inscripciones")
+    public ResponseEntity<List<MiInscripcionResponse>> listarMisInscripciones(@AuthenticationPrincipal final User usuario){
+        return ResponseEntity.ok(service.listarMisInscripciones(usuario));
     }
 }
