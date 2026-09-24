@@ -2,6 +2,7 @@ package com.utp.anarkiagames.service;
 
 import com.utp.anarkiagames.controller.InscripcionRequest;
 import com.utp.anarkiagames.controller.InscripcionResponse;
+import com.utp.anarkiagames.controller.MiInscripcionResponse;
 import com.utp.anarkiagames.exception.*;
 import com.utp.anarkiagames.model.Inscripcion;
 import com.utp.anarkiagames.model.TipoTicket;
@@ -16,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -67,5 +69,18 @@ public class InscripcionService {
                 tipoTicket.getTipo(),
                 guardada.getFechaCompra()
         );
+    }
+    public List<MiInscripcionResponse> listarMisInscripciones(final User usuario) {
+        return inscripcionRepository.findByUsuario(usuario).stream()
+                .map(i -> new MiInscripcionResponse(
+                        i.getId(),
+                        i.getTipoTicket().getTorneo().getId(),
+                        i.getTipoTicket().getTorneo().getNombre(),
+                        i.getTipoTicket().getTorneo().getJuego(),
+                        i.getTipoTicket().getTorneo().getFechaInicio(),
+                        i.getTipoTicket().getTipo(),
+                        i.getFechaCompra()
+                ))
+                .toList();
     }
 }
