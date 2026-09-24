@@ -48,6 +48,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/","/auth/**")
                                 .permitAll()
+                        .requestMatchers(HttpMethod.GET,"/torneos/mis-inscripciones")
+                                .authenticated()
                         .requestMatchers(HttpMethod.GET,"/torneos/**")
                                 .permitAll()
                         .requestMatchers("/admin/**")
