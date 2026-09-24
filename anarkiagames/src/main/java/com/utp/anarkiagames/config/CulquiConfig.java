@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class CulquiConfig {
-    @Value("${culqui.secretKey}")
+    @Value("${culqi.secret_key}")
     private String secretKey;
 
     @PostConstruct
