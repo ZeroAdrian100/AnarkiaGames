@@ -6,7 +6,7 @@ Este proyecto viene del curso "Curso Integrador I" (2025). El objetivo de esta n
 
 ## Stack
 
--**Java 25**
+- **Java 25**
 - **Spring Boot 4.1.0**
 - **Spring Security + JWT** (autenticación y autorización basada en roles)
 - **Spring Data JPA** (SQL Server)
