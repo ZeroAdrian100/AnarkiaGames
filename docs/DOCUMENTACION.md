@@ -14,7 +14,7 @@ Contenido:
 8. [Pagos](#8-pagos)
 9. [Configuración](#9-configuración)
 10. [Ejecución y pruebas](#10-ejecución-y-pruebas)
-11. [Cambios de esquema en la base de datos](#11-cambios-de-esquema-en-la-base-de-datos)
+11. [Base de datos y migraciones](#11-base-de-datos-y-migraciones)
 12. [Pendientes](#12-pendientes)
 
 ---
@@ -46,7 +46,8 @@ SQL Server
 |---|---|
 | Lenguaje | Java 25 |
 | Framework | Spring Boot 4.1 (Web, Data JPA, Security, Validation) |
-| Base de datos | SQL Server (`mssql-jdbc`) |
+| Base de datos | SQL Server (`mssql-jdbc`), migraciones con Flyway |
+| Tests | JUnit 5, Mockito, MockMvc y H2 en memoria |
 | Autenticación | JWT (`jjwt` 0.12) |
 | Pagos | Culqi (`culqi-java`) o simulación |
 | Variables de entorno | `spring-dotenv` (lee un archivo `.env`) |
@@ -64,6 +65,7 @@ Paquete raíz: `com.utp.anarkiagames` (en `anarkiagames/src/main/java`).
 |---|---|
 | `AppConfig` | Beans de autenticación: `UserDetailsService` (busca usuarios por email), `AuthenticationProvider`, `AuthenticationManager` y `PasswordEncoder` (BCrypt). |
 | `SecurityConfig` | Cadena de filtros: CORS, sesión stateless, reglas de acceso por ruta, respuesta 401 para peticiones sin autenticar y registro de `JwtAuthFilter`. |
+| `AdminInicial` | Crea el primer ADMIN al arrancar a partir de `ADMIN_EMAIL` y `ADMIN_PASSWORD` (sección 9). |
 | `JwtAuthFilter` | Lee `Authorization: Bearer <token>`. Si el access token es válido, autentica la petición con la entidad `User` como principal. Un token ausente, inválido o expirado deja la petición sin autenticar. |
 
 ### `controller`
@@ -105,7 +107,7 @@ DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `Tip
 
 | Interfaz | Consultas relevantes |
 |---|---|
-| `UserRepository` | `findByEmail`, `existsByEmail`. |
+| `UserRepository` | `findByEmail`, `existsByEmail`, `existsByRole`. |
 | `TorneoRepository` | `findByIdForUpdate`: lee el torneo con bloqueo pesimista (`PESSIMISTIC_WRITE`). |
 | `TipoTicketRepository` | `findByTorneo`, `findByTorneoAndTipo`. |
 | `InscripcionRepository` | `findByUsuario`, `existsByUsuarioAndTipoTicket`, `existsConOtroTipoEnTorneo`, `sumCantidadByTipoTicket` (tickets vendidos). |
@@ -204,7 +206,7 @@ Todas se aplican en `InscripcionService.comprar`:
 
 Otras reglas:
 
-- El registro público siempre crea usuarios `CLIENTE`. No hay endpoint para crear un `ADMIN` (ver sección 12).
+- El registro público siempre crea usuarios `CLIENTE`. El primer `ADMIN` se crea con `AdminInicial` (sección 9).
 - Un torneo admite un solo tipo de ticket por tipo de participación (`TipoTicketService`).
 - Al crear un torneo, `fechaInicio` debe estar en el futuro (`@Future`).
 
@@ -409,7 +411,17 @@ Para agregar otro proveedor (por ejemplo Mercado Pago), basta con crear una clas
 
 ## 9. Configuración
 
-Archivo `anarkiagames/src/main/resources/application.properties`. Los valores sensibles se leen de variables de entorno o del archivo `anarkiagames/.env`. Ese archivo está ignorado por git y nunca debe subirse.
+Archivo base: `anarkiagames/src/main/resources/application.properties`. Los valores sensibles se leen de variables de entorno o del archivo `anarkiagames/.env`. Ese archivo está ignorado por git y nunca debe subirse.
+
+### Perfiles
+
+| Perfil | Cómo se activa | Diferencia |
+|---|---|---|
+| `dev` | Por defecto, si no se define `SPRING_PROFILES_ACTIVE` | Muestra el SQL de Hibernate (`application-dev.properties`). |
+| `prod` | `SPRING_PROFILES_ACTIVE=prod` | Usa solo la configuración base, sin mostrar SQL. |
+| `test` | Lo activan los tests con `@ActiveProfiles("test")` | H2 en memoria (`src/test/resources/application-test.properties`). |
+
+### Variables de entorno
 
 | Variable | Propiedad | Obligatoria | Descripción |
 |---|---|---|---|
@@ -417,27 +429,45 @@ Archivo `anarkiagames/src/main/resources/application.properties`. Los valores se
 | `USER_DATABASE` | `spring.datasource.username` | Sí | Usuario de SQL Server. |
 | `PASSWORD_DATABASE` | `spring.datasource.password` | Sí | Contraseña de SQL Server. |
 | `JWT_SECRET` | `jwt.secret` | Sí | Clave en Base64 de al menos 256 bits. |
+| `PAYMENT_GATEWAY` | `payment.gateway` | No | `mock` (por defecto) o `culqi`. |
 | `CULQI_SECRET_KEY` | `culqi.secret_key` | Solo con Culqi | Llave secreta (`sk_test_...` o `sk_live_...`). |
 | `CORS_ALLOWED_ORIGINS` | `app.cors.allowed-origins` | No | Orígenes separados por coma. Por defecto `http://localhost:5173`. |
+| `ADMIN_EMAIL` | `app.admin.email` | No | Email del administrador inicial. |
+| `ADMIN_PASSWORD` | `app.admin.password` | No | Contraseña del administrador inicial (mínimo 8 caracteres). |
+| `ADMIN_NOMBRE` | `app.admin.nombre` | No | Nombre del administrador inicial. Por defecto `Administrador`. |
+| `SPRING_PROFILES_ACTIVE` | — | No | `prod` en producción. |
 
-Otras propiedades:
+### Otras propiedades
 
-| Propiedad | Valor actual | Descripción |
+| Propiedad | Valor | Descripción |
 |---|---|---|
-| `payment.gateway` | `mock` | `mock` o `culqi`. |
 | `jwt.expiration` | `86400000` | Duración del access token en ms (24 h). |
 | `jwt.refresh.expiration` | `604800000` | Duración del refresh token en ms (7 días). |
 | `jwt.reset.expiration` | `900000` | Reservada para la recuperación de contraseña (aún sin uso). |
-| `spring.jpa.hibernate.ddl-auto` | `update` | Hibernate crea y altera las tablas al iniciar. |
+| `spring.jpa.hibernate.ddl-auto` | `validate` | Hibernate no modifica tablas; solo verifica que coincidan con las entidades. |
+| `spring.flyway.baseline-on-migrate` | `true` | Ver la sección 11. |
 | `server.port` | `8080` | Puerto HTTP. |
 
-Ejemplo de `.env`:
+### Administrador inicial
+
+El registro público solo crea clientes. Para tener el primer ADMIN, define `ADMIN_EMAIL` y `ADMIN_PASSWORD` antes de arrancar. Al iniciar, `AdminInicial`:
+
+1. No hace nada si falta alguno de los dos valores o si ya existe algún ADMIN.
+2. No hace nada, y avisa en el log, si la contraseña tiene menos de 8 caracteres.
+3. Si el email ya está registrado como cliente, lo convierte en ADMIN y mantiene su contraseña actual.
+4. Si no, crea el usuario ADMIN con esa contraseña.
+
+Después de crear el administrador puedes quitar `ADMIN_PASSWORD` del `.env`.
+
+### Ejemplo de `.env`
 
 ```
 URL_DATABASE=jdbc:sqlserver://localhost:1433;databaseName=anarkiagames;encrypt=false
 USER_DATABASE=sa
 PASSWORD_DATABASE=<tu_contraseña>
 JWT_SECRET=<clave_base64>
+ADMIN_EMAIL=admin@anarkiagames.com
+ADMIN_PASSWORD=<contraseña_admin>
 ```
 
 Una forma de generar `JWT_SECRET`:
@@ -450,7 +480,7 @@ openssl rand -base64 32
 
 ## 10. Ejecución y pruebas
 
-Requisitos: JDK 25 y SQL Server con la base de datos creada.
+Requisitos: JDK 25 y SQL Server con la base de datos creada (puede estar vacía).
 
 Desde la carpeta `anarkiagames`, levantar la aplicación:
 
@@ -458,36 +488,43 @@ Desde la carpeta `anarkiagames`, levantar la aplicación:
 ./mvnw spring-boot:run
 ```
 
-Ejecutar los tests unitarios (no necesitan base de datos):
+Ejecutar todos los tests. No necesitan SQL Server, porque usan H2 en memoria:
 
 ```bash
-./mvnw test -Dtest=InscripcionServiceTest
+./mvnw test
 ```
 
-`InscripcionServiceTest` cubre las reglas de la sección 4: cantidades, límite por compra, tipo único por torneo, cierre de venta, stock, pago rechazado y reembolso.
+| Clase | Tipo | Qué cubre |
+|---|---|---|
+| `InscripcionServiceTest` | Unitario (Mockito) | Reglas de la sección 4: cantidades, límite por compra, tipo único por torneo, cierre de venta, stock, pago rechazado y reembolso. |
+| `CompraIntegrationTest` | Integración (H2 + MockMvc) | Flujo HTTP completo: administrador inicial, creación de torneos y tickets, compras, cupos disponibles, 401/403, refresh token, validaciones y email duplicado. También valida las consultas JPQL. |
+| `AnarkiagamesApplicationTests` | Integración | El contexto de Spring arranca. |
 
-`AnarkiagamesApplicationTests.contextLoads` levanta todo el contexto y **necesita** la base de datos y las variables de entorno.
+Las migraciones de Flyway usan T-SQL y no corren en H2. Por eso los tests crean el esquema desde las entidades, y las migraciones se verifican al arrancar la app contra SQL Server.
 
 ---
 
-## 11. Cambios de esquema en la base de datos
+## 11. Base de datos y migraciones
 
-Con `ddl-auto=update`, Hibernate agrega columnas pero **no borra** restricciones. Después de actualizar el código, ejecuta esto una sola vez en SQL Server:
+El esquema lo maneja **Flyway**. Los scripts están en `anarkiagames/src/main/resources/db/migration` y se aplican solos al arrancar, en orden de versión. Flyway guarda en la tabla `flyway_schema_history` cuáles ya se ejecutaron.
 
-1. Busca la restricción única antigua de `inscripciones`, que impedía a un espectador comprar dos veces:
+| Versión | Script | Qué hace |
+|---|---|---|
+| 1 | `V1__esquema_inicial.sql` | Crea `users`, `torneos`, `tipo_tickets` e `inscripciones` como estaban antes de Flyway. |
+| 2 | `V2__compras_multiples_de_espectador.sql` | Borra la restricción única `(usuario_id, tipo_ticket_id)` de `inscripciones`, agrega `cantidad` y `monto` si no existen y estima el `monto` de las compras anteriores con el precio actual del ticket. |
 
-   ```sql
-   SELECT name FROM sys.key_constraints
-   WHERE parent_object_id = OBJECT_ID('inscripciones') AND type = 'UQ';
-   ```
+Comportamiento según la BD:
 
-2. Elimínala usando el nombre que devolvió la consulta:
+- **BD vacía:** Flyway ejecuta V1 y V2.
+- **BD que ya existía (creada por Hibernate con `ddl-auto=update`):** en el primer arranque, Flyway la registra como versión 1 sin ejecutar V1 (`baseline-on-migrate`) y luego ejecuta V2. V2 funciona aunque Hibernate ya haya creado `cantidad` y `monto`, y aunque la restricción ya se haya borrado a mano.
 
-   ```sql
-   ALTER TABLE inscripciones DROP CONSTRAINT <nombre>;
-   ```
+Haz un respaldo de la BD antes del primer arranque con Flyway.
 
-Las columnas nuevas `cantidad` y `monto` se crean solas al iniciar. Las filas existentes quedan con `cantidad = 1` y `monto = 0`, porque antes no se guardaba el monto.
+Para cambiar el esquema en el futuro:
+
+1. Crea un script nuevo con la versión siguiente, por ejemplo `V3__descripcion.sql`.
+2. Nunca edites un script que ya se ejecutó. Flyway guarda su checksum y falla al arrancar si cambia.
+3. Actualiza la entidad JPA. Con `ddl-auto=validate`, la app no arranca si entidad y tabla no coinciden.
 
 ---
 
@@ -495,10 +532,6 @@ Las columnas nuevas `cantidad` y `monto` se crean solas al iniciar. Las filas ex
 
 Mejoras identificadas que todavía no están implementadas:
 
-- **Infraestructura:**
-  - Perfiles dev/prod y migraciones con Flyway en lugar de `ddl-auto=update`.
-  - Mecanismo para crear el primer ADMIN (seed o comando).
-  - Tests de integración con base de datos.
 - **Administración:**
   - Editar y cancelar torneos y tickets.
   - Panel de stock e ingresos.
