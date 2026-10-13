@@ -3,6 +3,22 @@
     {
       "name": "jwt.secret",
       "type": "java.lang.String",
-      "description": "Clave secreta para firmar los tokens JWT"
-  }
-] }
+      "description": "Clave secreta en Base64 para firmar los tokens JWT"
+    },
+    {
+      "name": "payment.gateway",
+      "type": "java.lang.String",
+      "description": "Pasarela de pago activa: mock (por defecto) o culqi"
+    },
+    {
+      "name": "culqi.secret_key",
+      "type": "java.lang.String",
+      "description": "Llave secreta de Culqi; solo se usa con payment.gateway=culqi"
+    },
+    {
+      "name": "app.cors.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Orígenes permitidos por CORS, separados por coma"
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import com.utp.anarkiagames.controller.InscripcionResponse;
 import com.utp.anarkiagames.controller.MiInscripcionResponse;
 import com.utp.anarkiagames.exception.*;
 import com.utp.anarkiagames.model.Inscripcion;
+import com.utp.anarkiagames.model.TipoParticipacion;
 import com.utp.anarkiagames.model.TipoTicket;
 import com.utp.anarkiagames.model.Torneo;
 import com.utp.anarkiagames.model.User;
@@ -25,39 +26,68 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class InscripcionService {
+    public static final int MAX_ESPECTADOR_POR_COMPRA = 5;
+
     private final InscripcionRepository inscripcionRepository;
     private final TipoTicketRepository tipoTicketRepository;
     private final TorneoRepository torneoRepository;
     private final PaymentGateway paymentGateway;
 
     /**
-     * Compra un ticket. El torneo queda bloqueado durante toda la compra, así dos compras
-     * simultáneas no pueden superar el stock. Si el cobro pasa pero la inscripción no se
-     * puede guardar, el cargo se reembolsa.
+     * Compra tickets de un torneo. Reglas:
+     * <ul>
+     *   <li>Solo antes de la fecha de inicio del torneo.</li>
+     *   <li>Un usuario participa en un torneo como COMPETIDOR o como ESPECTADOR, nunca ambos.</li>
+     *   <li>COMPETIDOR: un único ticket. ESPECTADOR: hasta {@value #MAX_ESPECTADOR_POR_COMPRA} por compra
+     *       y puede volver a comprar.</li>
+     * </ul>
+     * El torneo queda bloqueado durante toda la compra, así dos compras simultáneas no pueden
+     * superar el stock. Si el cobro pasa pero la inscripción no se puede guardar, el cargo se reembolsa.
      */
     @Transactional
     public InscripcionResponse comprar(final Long torneoId, final InscripcionRequest request, final User usuario) {
+        final int cantidad = request.cantidadSolicitada();
+
         final Torneo torneo = torneoRepository.findByIdForUpdate(torneoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Torneo no encontrado"));
+
+        if (!torneo.getFechaInicio().isAfter(LocalDateTime.now())) {
+            throw new ConflictoException("La venta de tickets para este torneo ya cerró");
+        }
 
         final TipoTicket tipoTicket = tipoTicketRepository.findByTorneoAndTipo(torneo, request.tipo())
                 .orElseThrow(() -> new RecursoNoEncontradoException(
                         "No hay tickets de tipo " + request.tipo() + " configurados para este torneo"));
 
-        inscripcionRepository.findByUsuarioAndTipoTicket(usuario, tipoTicket)
-                .ifPresent(i -> { throw new ConflictoException("Ya tienes un ticket de este tipo para este torneo"); });
-
-        final long vendidos = inscripcionRepository.countByTipoTicket(tipoTicket);
-        if (vendidos >= tipoTicket.getStockMaximo()) {
-            throw new ConflictoException("No hay más cupos disponibles para " + request.tipo());
+        if (inscripcionRepository.existsConOtroTipoEnTorneo(usuario, torneo, request.tipo())) {
+            throw new ConflictoException("Ya estás inscrito en este torneo con otro tipo de participación");
         }
 
-        final long monto = tipoTicket.getPrecio();
+        if (request.tipo() == TipoParticipacion.COMPETIDOR) {
+            if (cantidad != 1) {
+                throw new SolicitudInvalidaException("Un competidor solo puede comprar 1 ticket");
+            }
+            if (inscripcionRepository.existsByUsuarioAndTipoTicket(usuario, tipoTicket)) {
+                throw new ConflictoException("Ya estás inscrito como competidor en este torneo");
+            }
+        } else if (cantidad > MAX_ESPECTADOR_POR_COMPRA) {
+            throw new SolicitudInvalidaException(
+                    "Máximo " + MAX_ESPECTADOR_POR_COMPRA + " tickets de espectador por compra");
+        }
+
+        final long disponibles = tipoTicket.getStockMaximo() - inscripcionRepository.sumCantidadByTipoTicket(tipoTicket);
+        if (cantidad > disponibles) {
+            throw new ConflictoException(disponibles <= 0
+                    ? "No hay más cupos disponibles para " + request.tipo()
+                    : "Solo quedan " + disponibles + " cupos para " + request.tipo());
+        }
+
+        final long monto = Math.multiplyExact(tipoTicket.getPrecio(), cantidad);
         final PaymentResult resultado = paymentGateway.cobrar(
                 request.tokenId(),
                 monto,
                 usuario.getEmail(),
-                "Ticket " + request.tipo() + " - " + torneo.getNombre()
+                cantidad + " ticket(s) " + request.tipo() + " - " + torneo.getNombre()
         );
 
         if (!resultado.exitoso()) {
@@ -67,8 +97,10 @@ public class InscripcionService {
         final Inscripcion inscripcion = Inscripcion.builder()
                 .usuario(usuario)
                 .tipoTicket(tipoTicket)
+                .cantidad(cantidad)
+                .monto(monto)
                 .fechaCompra(LocalDateTime.now())
-                .culqiChargeId(resultado.referenciaId())
+                .referenciaPago(resultado.referenciaId())
                 .build();
 
         final Inscripcion guardada;
@@ -83,6 +115,8 @@ public class InscripcionService {
                 guardada.getId(),
                 torneo.getId(),
                 tipoTicket.getTipo(),
+                guardada.getCantidad(),
+                guardada.getMonto(),
                 guardada.getFechaCompra()
         );
     }
@@ -96,6 +130,7 @@ public class InscripcionService {
                         i.getTipoTicket().getTorneo().getJuego(),
                         i.getTipoTicket().getTorneo().getFechaInicio(),
                         i.getTipoTicket().getTipo(),
+                        i.getCantidad(),
                         i.getFechaCompra()
                 ))
                 .toList();

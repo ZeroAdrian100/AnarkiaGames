@@ -2,6 +2,8 @@ package com.utp.anarkiagames.controller;
 
 import com.utp.anarkiagames.service.TipoTicketService;
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,8 +17,8 @@ public class TipoTicketController {
     @PostMapping
     public ResponseEntity<TipoTicketResponse> crear(
             @PathVariable final Long torneoId,
-            @RequestBody final TipoTicketRequest request){
+            @Valid @RequestBody final TipoTicketRequest request){
         final TipoTicketResponse response = service.crear(torneoId, request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

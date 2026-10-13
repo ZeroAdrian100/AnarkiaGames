@@ -12,6 +12,7 @@ public record MiInscripcionResponse(
         String juego,
         LocalDateTime fechaInicioTorneo,
         TipoParticipacion tipo,
+        int cantidad,
         LocalDateTime fechaCompra
 ) {
 }

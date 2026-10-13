@@ -3,7 +3,6 @@ package com.utp.anarkiagames.model;
 import jakarta.persistence.*;
 import lombok.*;
 
-@Data
 @Getter
 @Setter
 @Builder
