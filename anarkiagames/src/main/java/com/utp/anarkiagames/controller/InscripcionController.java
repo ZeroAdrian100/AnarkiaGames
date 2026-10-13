@@ -20,7 +20,7 @@ public class InscripcionController {
     public ResponseEntity<InscripcionResponse> comprar(
             @PathVariable final Long torneoId,
             @RequestBody final InscripcionRequest request,
-            @AuthenticationPrincipal final User usuario)throws Exception{
+            @AuthenticationPrincipal final User usuario){
         final InscripcionResponse response = service.comprar(torneoId, request, usuario);
         return ResponseEntity.ok(response);
     }
