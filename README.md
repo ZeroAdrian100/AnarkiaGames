@@ -18,7 +18,11 @@ Este proyecto viene del curso "Curso Integrador I" (2025). El objetivo de esta n
 - **Roles de usuario:** `ADMIN` y `CLIENTE`. El registro público siempre crea un `CLIENTE`.
 - **Torneos:** creación por parte de un administrador, consulta pública (sin necesidad de login).
 - **Tipos de ticket por torneo:** cada torneo define precio y cupo máximo para dos tipos de participación, `COMPETIDOR` y `ESPECTADOR`.
-- **Inscripciones:** un cliente compra un ticket eligiendo el tipo de participación para un torneo específico. La compra pasa por una pasarela de pago antes de confirmarse.
+- **Inscripciones:** un cliente participa en cada torneo solo como competidor (1 ticket) o como espectador (hasta 5 tickets por compra). La venta cierra al iniciar el torneo y la compra pasa por una pasarela de pago antes de confirmarse.
 - **Pagos desacoplados:** la lógica de cobro vive detrás de una interfaz (`PaymentGateway`), con dos implementaciones intercambiables por configuración:
   - `culqi` — cobro real a través de la API de Culqi.
-  - `mock` — simula un pago exitoso, útil mientras no se cuenta con credenciales de comercio verificado.
+  - `mock` — simula pagos (el token `tok_rechazado` simula un rechazo), útil mientras no se cuenta con credenciales de comercio verificado.
+
+## Documentación
+
+La documentación técnica completa (arquitectura, modelo de datos, reglas de negocio, API y configuración) está en [docs/DOCUMENTACION.md](docs/DOCUMENTACION.md).

@@ -1,0 +1,516 @@
+# Documentación técnica de AnarkiaGames
+
+Backend REST para la venta de tickets de torneos de videojuegos. Un cliente compra tickets como **competidor** o como **espectador**; un administrador crea torneos y tipos de ticket.
+
+Contenido:
+
+1. [Arquitectura](#1-arquitectura)
+2. [Estructura del código](#2-estructura-del-código)
+3. [Modelo de datos](#3-modelo-de-datos)
+4. [Reglas de negocio](#4-reglas-de-negocio)
+5. [Seguridad y autenticación](#5-seguridad-y-autenticación)
+6. [API REST](#6-api-rest)
+7. [Manejo de errores](#7-manejo-de-errores)
+8. [Pagos](#8-pagos)
+9. [Configuración](#9-configuración)
+10. [Ejecución y pruebas](#10-ejecución-y-pruebas)
+11. [Cambios de esquema en la base de datos](#11-cambios-de-esquema-en-la-base-de-datos)
+12. [Pendientes](#12-pendientes)
+
+---
+
+## 1. Arquitectura
+
+Aplicación Spring Boot en capas:
+
+```
+Cliente (frontend Vite en localhost:5173)
+        │  HTTP + JSON, Authorization: Bearer <access_token>
+        ▼
+JwtAuthFilter ──► SecurityConfig (reglas por ruta y rol)
+        │
+        ▼
+Controladores (controller)   ← DTOs de entrada/salida (records) + Bean Validation
+        │
+        ▼
+Servicios (service)          ← reglas de negocio y transacciones
+        │                └──► PaymentGateway (mock | culqi)
+        ▼
+Repositorios (repository)    ← Spring Data JPA
+        │
+        ▼
+SQL Server
+```
+
+| Componente | Tecnología |
+|---|---|
+| Lenguaje | Java 25 |
+| Framework | Spring Boot 4.1 (Web, Data JPA, Security, Validation) |
+| Base de datos | SQL Server (`mssql-jdbc`) |
+| Autenticación | JWT (`jjwt` 0.12) |
+| Pagos | Culqi (`culqi-java`) o simulación |
+| Variables de entorno | `spring-dotenv` (lee un archivo `.env`) |
+| Utilidades | Lombok |
+
+---
+
+## 2. Estructura del código
+
+Paquete raíz: `com.utp.anarkiagames` (en `anarkiagames/src/main/java`).
+
+### `config`
+
+| Clase | Responsabilidad |
+|---|---|
+| `AppConfig` | Beans de autenticación: `UserDetailsService` (busca usuarios por email), `AuthenticationProvider`, `AuthenticationManager` y `PasswordEncoder` (BCrypt). |
+| `SecurityConfig` | Cadena de filtros: CORS, sesión stateless, reglas de acceso por ruta, respuesta 401 para peticiones sin autenticar y registro de `JwtAuthFilter`. |
+| `JwtAuthFilter` | Lee `Authorization: Bearer <token>`. Si el access token es válido, autentica la petición con la entidad `User` como principal. Un token ausente, inválido o expirado deja la petición sin autenticar. |
+
+### `controller`
+
+Controladores REST y DTOs. Los DTOs son `record` de Java.
+
+| Clase | Ruta base | Descripción |
+|---|---|---|
+| `AuthController` | `/auth` | Registro, login y renovación de token. |
+| `TorneoController` | `/torneos` | Consulta pública de torneos. |
+| `InscripcionController` | `/torneos` | Compra de tickets y listado de las inscripciones del usuario. |
+| `TorneoAdminController` | `/admin/torneos` | Creación de torneos (solo ADMIN). |
+| `TipoTicketController` | `/admin/torneos/{torneoId}/tipos-ticket` | Creación de tipos de ticket (solo ADMIN). |
+
+DTOs de entrada (validados con `@Valid`): `RegisterRequest`, `LoginRequest`, `TorneoRequest`, `TipoTicketRequest`, `InscripcionRequest`.
+
+DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `TipoTicketResponse`, `InscripcionResponse`, `MiInscripcionResponse`.
+
+### `service`
+
+| Clase | Responsabilidad |
+|---|---|
+| `AuthService` | Registra clientes (siempre con rol `CLIENTE`), autentica y renueva el access token a partir de un refresh token. |
+| `JwtService` | Genera y valida JWT. Distingue access y refresh token con el claim `type`. |
+| `TorneoService` | Crea, lista y detalla torneos. El detalle incluye los tipos de ticket con sus cupos disponibles. |
+| `TipoTicketService` | Crea el tipo de ticket de un torneo; solo uno por tipo de participación. |
+| `InscripcionService` | Compra de tickets con todas las reglas de negocio (sección 4) y listado de "mis inscripciones". |
+
+### `service.payment`
+
+| Clase | Responsabilidad |
+|---|---|
+| `PaymentGateway` | Interfaz con `cobrar(...)` y `reembolsar(...)`. |
+| `PaymentResult` | Resultado: `exitoso`, `referenciaId` (id del cargo o reembolso) y `mensajeError`. |
+| `MockPaymentGateway` | Simulación. Se activa con `payment.gateway=mock` o si la propiedad falta. |
+| `CulqiPaymentGateway` | Integración real con Culqi. Se activa con `payment.gateway=culqi`. |
+
+### `repository`
+
+| Interfaz | Consultas relevantes |
+|---|---|
+| `UserRepository` | `findByEmail`, `existsByEmail`. |
+| `TorneoRepository` | `findByIdForUpdate`: lee el torneo con bloqueo pesimista (`PESSIMISTIC_WRITE`). |
+| `TipoTicketRepository` | `findByTorneo`, `findByTorneoAndTipo`. |
+| `InscripcionRepository` | `findByUsuario`, `existsByUsuarioAndTipoTicket`, `existsConOtroTipoEnTorneo`, `sumCantidadByTipoTicket` (tickets vendidos). |
+
+### `exception`
+
+| Clase | Código HTTP |
+|---|---|
+| `SolicitudInvalidaException` | 400 |
+| `RecursoNoEncontradoException` | 404 |
+| `ConflictoException` | 409 |
+| `PagoRechazadoException` | 402 |
+| `GlobalExceptionHandler` | Convierte toda excepción en un `ErrorResponse` (sección 7). |
+
+### `model`
+
+Entidades JPA y enums. Ver la sección 3.
+
+---
+
+## 3. Modelo de datos
+
+```
+users 1 ──── * inscripciones * ──── 1 tipo_tickets * ──── 1 torneos
+```
+
+### `User` → tabla `users`
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | `Long` | PK autoincremental. |
+| `nombre` | `String` | Obligatorio. |
+| `email` | `String` | Único. Es el "username" para Spring Security. |
+| `passwordHash` | `String` | Hash BCrypt. |
+| `role` | `Role` | `ADMIN` o `CLIENTE`. |
+| `createdAt` | `LocalDateTime` | Lo llena Hibernate al insertar (`@CreationTimestamp`). |
+
+`User` implementa `UserDetails`; su autoridad es `ROLE_<role>`.
+
+### `Torneo` → tabla `torneos`
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | `Long` | PK. |
+| `nombre` | `String` | Obligatorio. |
+| `juego` | `String` | Obligatorio. |
+| `fechaInicio` | `LocalDateTime` | Obligatorio. La venta cierra en esta fecha. |
+| `createdAt` | `LocalDateTime` | `@CreationTimestamp`. |
+
+### `TipoTicket` → tabla `tipo_tickets`
+
+Restricción única: `(torneo_id, tipo)`. Cada torneo tiene como máximo un tipo COMPETIDOR y un tipo ESPECTADOR.
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | `Long` | PK. |
+| `torneo` | `Torneo` | FK `torneo_id`. |
+| `tipo` | `TipoParticipacion` | `COMPETIDOR` o `ESPECTADOR`. |
+| `stockMaximo` | `int` | Cupo total de tickets. |
+| `precio` | `long` | Precio unitario **en céntimos** (S/ 25.00 = `2500`). |
+| `descripcion` | `String` | Opcional. |
+| `imagenUrl` | `String` | Opcional. |
+
+### `Inscripcion` → tabla `inscripciones`
+
+Una compra. Un espectador puede tener varias inscripciones en el mismo torneo.
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | `Long` | PK. |
+| `usuario` | `User` | FK `usuario_id`. |
+| `tipoTicket` | `TipoTicket` | FK `tipo_ticket_id`. |
+| `cantidad` | `int` | Tickets de esta compra. Siempre 1 para COMPETIDOR. |
+| `monto` | `long` | Total cobrado en céntimos (`precio × cantidad`). |
+| `fechaCompra` | `LocalDateTime` | Momento de la compra. |
+| `referenciaPago` | `String` | Id del cargo en la pasarela. Columna `culqi_charge_id`. |
+
+---
+
+## 4. Reglas de negocio
+
+Todas se aplican en `InscripcionService.comprar`:
+
+1. **Venta solo antes del inicio.** Si `fechaInicio` ya pasó, la compra devuelve 409.
+2. **Un tipo de participación por torneo.** Si el usuario ya tiene una inscripción del otro tipo en ese torneo, devuelve 409.
+3. **Competidor:**
+   - Solo puede pedir 1 ticket. Si pide más, devuelve 400.
+   - Solo puede inscribirse una vez por torneo. Si repite, devuelve 409.
+4. **Espectador:**
+   - Puede pedir hasta `MAX_ESPECTADOR_POR_COMPRA` (5) tickets por compra. Si pide más, devuelve 400.
+   - Puede comprar varias veces.
+5. **Stock.** Los tickets vendidos son la suma de `cantidad` de las inscripciones de ese tipo. Si la cantidad pedida supera los disponibles, devuelve 409.
+6. **Concurrencia.** El método es `@Transactional` y bloquea la fila del torneo (`findByIdForUpdate`) hasta terminar. Dos compras del mismo torneo se ejecutan una después de la otra, así que el stock nunca se supera.
+7. **Pago.** Se cobra `precio × cantidad`. Si el pago es rechazado, devuelve 402 y no se guarda nada.
+8. **Reembolso automático.** Si el cobro pasa pero la inscripción no se puede guardar, se llama a `PaymentGateway.reembolsar`. Si el reembolso también falla, el error queda en el log con la referencia del cargo para reembolsarlo a mano.
+
+Otras reglas:
+
+- El registro público siempre crea usuarios `CLIENTE`. No hay endpoint para crear un `ADMIN` (ver sección 12).
+- Un torneo admite un solo tipo de ticket por tipo de participación (`TipoTicketService`).
+- Al crear un torneo, `fechaInicio` debe estar en el futuro (`@Future`).
+
+---
+
+## 5. Seguridad y autenticación
+
+### Tokens
+
+`POST /auth/login` y `POST /auth/register` devuelven dos JWT firmados con HMAC (`jwt.secret`):
+
+| Token | Claim `type` | Duración (por defecto) | Uso |
+|---|---|---|---|
+| `access_token` | `access` | 24 h (`jwt.expiration`) | Header `Authorization: Bearer <token>` en cada petición. |
+| `refresh_token` | `refresh` | 7 días (`jwt.refresh.expiration`) | Solo en `POST /auth/refresh` para obtener un nuevo access token. |
+
+Claims de cada token: `sub` (email), `jti` (id del usuario), `name`, `role`, `type`, `iat` y `exp`.
+
+Un refresh token no sirve como access token, ni un access token como refresh: `JwtService` verifica el claim `type`. Los tokens emitidos antes de este cambio no tienen `type` y ya no son válidos; el usuario debe volver a iniciar sesión.
+
+### Reglas de acceso (`SecurityConfig`)
+
+| Ruta | Acceso |
+|---|---|
+| `/`, `/auth/**` | Público |
+| `GET /torneos/mis-inscripciones` | Autenticado |
+| `GET /torneos/**` | Público |
+| `/admin/**` | Rol `ADMIN` |
+| Cualquier otra | Autenticado |
+
+- Petición sin token válido a una ruta protegida: **401**.
+- Usuario autenticado sin el rol requerido: **403**.
+
+### CORS
+
+Los orígenes permitidos salen de `app.cors.allowed-origins` (por defecto `http://localhost:5173`). Se permiten credenciales y los métodos GET, POST, PUT, DELETE, PATCH y OPTIONS.
+
+---
+
+## 6. API REST
+
+Todos los cuerpos son JSON. Los montos van en céntimos. Las fechas usan ISO-8601 sin zona horaria (`2026-11-20T18:00:00`).
+
+### Autenticación
+
+#### `POST /auth/register` → 201
+
+```json
+{ "name": "Ana", "email": "ana@mail.com", "password": "secreta123" }
+```
+
+Validaciones:
+- `name`: obligatorio, máximo 100 caracteres.
+- `email`: formato válido.
+- `password`: entre 8 y 72 caracteres.
+
+Respuesta:
+
+```json
+{ "access_token": "eyJ...", "refresh_token": "eyJ..." }
+```
+
+Errores: 400 (validación), 409 (email ya registrado).
+
+#### `POST /auth/login` → 200
+
+```json
+{ "email": "ana@mail.com", "password": "secreta123" }
+```
+
+Respuesta: igual que el registro. Errores: 400 y 401 ("Email o contraseña incorrectos").
+
+#### `POST /auth/refresh` → 200
+
+Header: `Authorization: Bearer <refresh_token>`.
+
+Respuesta: un `access_token` nuevo y el mismo `refresh_token`. Error: 401 si el token es inválido, expirado o no es de tipo refresh.
+
+### Torneos (público)
+
+#### `GET /torneos` → 200
+
+```json
+[ { "id": 1, "nombre": "Copa Anarkia", "juego": "Tekken 8", "fechaInicio": "2026-11-20T18:00:00" } ]
+```
+
+#### `GET /torneos/{torneoId}` → 200
+
+```json
+{
+  "id": 1,
+  "nombre": "Copa Anarkia",
+  "juego": "Tekken 8",
+  "fechaInicio": "2026-11-20T18:00:00",
+  "tiposTicket": [
+    {
+      "id": 3, "torneoId": 1, "tipo": "ESPECTADOR",
+      "stockMaximo": 100, "disponibles": 87, "precio": 2500,
+      "descripcion": "Entrada general", "imagenUrl": null
+    }
+  ]
+}
+```
+
+Error: 404 si el torneo no existe.
+
+### Inscripciones (autenticado)
+
+#### `POST /torneos/{torneoId}/inscripciones` → 201
+
+```json
+{ "tipo": "ESPECTADOR", "cantidad": 3, "tokenId": "tkn_..." }
+```
+
+| Campo | Obligatorio | Descripción |
+|---|---|---|
+| `tipo` | Sí | `COMPETIDOR` o `ESPECTADOR`. |
+| `cantidad` | No | Por defecto 1. Competidor: 1. Espectador: 1 a 5. |
+| `tokenId` | Con Culqi | Token de tarjeta generado en el frontend. Con el mock, `tok_rechazado` simula un rechazo. |
+
+Respuesta:
+
+```json
+{ "id": 15, "torneoId": 1, "tipo": "ESPECTADOR", "cantidad": 3, "monto": 7500, "fechaCompra": "2026-10-13T12:30:00" }
+```
+
+Errores: 400, 401, 402 (pago rechazado), 404 (torneo o tipo de ticket inexistente) y 409 (venta cerrada, otro tipo ya comprado, competidor repetido o sin cupos).
+
+#### `GET /torneos/mis-inscripciones` → 200
+
+```json
+[
+  {
+    "inscripcionId": 15, "torneoId": 1, "torneoNombre": "Copa Anarkia",
+    "juego": "Tekken 8", "fechaInicioTorneo": "2026-11-20T18:00:00",
+    "tipo": "ESPECTADOR", "cantidad": 3, "fechaCompra": "2026-10-13T12:30:00"
+  }
+]
+```
+
+### Administración (rol ADMIN)
+
+#### `POST /admin/torneos` → 201
+
+```json
+{ "nombre": "Copa Anarkia", "juego": "Tekken 8", "fechaInicio": "2026-11-20T18:00:00" }
+```
+
+Validaciones: `nombre` y `juego` son obligatorios; `fechaInicio` es obligatoria y debe ser futura. La respuesta es un `TorneoResponse`.
+
+#### `POST /admin/torneos/{torneoId}/tipos-ticket` → 201
+
+```json
+{ "tipo": "COMPETIDOR", "stockMaximo": 32, "precio": 5000, "descripcion": "Cupo de jugador", "imagenUrl": null }
+```
+
+Validaciones: `tipo` es obligatorio; `stockMaximo` y `precio` deben ser mayores que 0. La respuesta es un `TipoTicketResponse` con `disponibles` igual a `stockMaximo`.
+
+Errores: 404 (torneo inexistente) y 409 (ya existe ese tipo de ticket en el torneo).
+
+---
+
+## 7. Manejo de errores
+
+Todo error devuelve el mismo formato (`exception.ErrorResponse`):
+
+```json
+{
+  "timestamp": "2026-10-13T12:30:00",
+  "status": 409,
+  "error": "Conflict",
+  "message": "Solo quedan 2 cupos para ESPECTADOR"
+}
+```
+
+| Origen | Status |
+|---|---|
+| Validación de DTO (`MethodArgumentNotValidException`) | 400. El mensaje lista `campo: error` separados por `;`. |
+| JSON mal formado o enum desconocido | 400 |
+| `SolicitudInvalidaException` | 400 |
+| Credenciales o refresh token inválidos | 401 |
+| `PagoRechazadoException` | 402 |
+| `RecursoNoEncontradoException` | 404 |
+| `ConflictoException`, violación de restricción en BD | 409 |
+| Excepciones propias de Spring MVC (ruta inexistente, método no permitido, etc.) | El status que traen |
+| Cualquier otra | 500 "Ocurrió un error inesperado". El detalle queda en el log. |
+
+---
+
+## 8. Pagos
+
+La propiedad `payment.gateway` elige la implementación de `PaymentGateway`:
+
+| Valor | Clase | Comportamiento |
+|---|---|---|
+| `mock` (por defecto) | `MockPaymentGateway` | Todo cobro es exitoso con referencia `chr_mock_<uuid>`, salvo el token `tok_rechazado`, que simula un rechazo. Los reembolsos siempre son exitosos. |
+| `culqi` | `CulqiPaymentGateway` | Cobra en soles (PEN) con la API de Culqi usando `culqi.secret_key`. El reembolso usa el motivo `solicitud_comprador`. Los errores de red se devuelven como pago fallido, no como excepción. |
+
+Para agregar otro proveedor (por ejemplo Mercado Pago), basta con crear una clase que implemente `PaymentGateway` con `@ConditionalOnProperty(name = "payment.gateway", havingValue = "<nombre>")`. El resto del código no cambia.
+
+---
+
+## 9. Configuración
+
+Archivo `anarkiagames/src/main/resources/application.properties`. Los valores sensibles se leen de variables de entorno o del archivo `anarkiagames/.env`. Ese archivo está ignorado por git y nunca debe subirse.
+
+| Variable | Propiedad | Obligatoria | Descripción |
+|---|---|---|---|
+| `URL_DATABASE` | `spring.datasource.url` | Sí | Ejemplo: `jdbc:sqlserver://localhost:1433;databaseName=anarkiagames;encrypt=false` |
+| `USER_DATABASE` | `spring.datasource.username` | Sí | Usuario de SQL Server. |
+| `PASSWORD_DATABASE` | `spring.datasource.password` | Sí | Contraseña de SQL Server. |
+| `JWT_SECRET` | `jwt.secret` | Sí | Clave en Base64 de al menos 256 bits. |
+| `CULQI_SECRET_KEY` | `culqi.secret_key` | Solo con Culqi | Llave secreta (`sk_test_...` o `sk_live_...`). |
+| `CORS_ALLOWED_ORIGINS` | `app.cors.allowed-origins` | No | Orígenes separados por coma. Por defecto `http://localhost:5173`. |
+
+Otras propiedades:
+
+| Propiedad | Valor actual | Descripción |
+|---|---|---|
+| `payment.gateway` | `mock` | `mock` o `culqi`. |
+| `jwt.expiration` | `86400000` | Duración del access token en ms (24 h). |
+| `jwt.refresh.expiration` | `604800000` | Duración del refresh token en ms (7 días). |
+| `jwt.reset.expiration` | `900000` | Reservada para la recuperación de contraseña (aún sin uso). |
+| `spring.jpa.hibernate.ddl-auto` | `update` | Hibernate crea y altera las tablas al iniciar. |
+| `server.port` | `8080` | Puerto HTTP. |
+
+Ejemplo de `.env`:
+
+```
+URL_DATABASE=jdbc:sqlserver://localhost:1433;databaseName=anarkiagames;encrypt=false
+USER_DATABASE=sa
+PASSWORD_DATABASE=<tu_contraseña>
+JWT_SECRET=<clave_base64>
+```
+
+Una forma de generar `JWT_SECRET`:
+
+```bash
+openssl rand -base64 32
+```
+
+---
+
+## 10. Ejecución y pruebas
+
+Requisitos: JDK 25 y SQL Server con la base de datos creada.
+
+Desde la carpeta `anarkiagames`, levantar la aplicación:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Ejecutar los tests unitarios (no necesitan base de datos):
+
+```bash
+./mvnw test -Dtest=InscripcionServiceTest
+```
+
+`InscripcionServiceTest` cubre las reglas de la sección 4: cantidades, límite por compra, tipo único por torneo, cierre de venta, stock, pago rechazado y reembolso.
+
+`AnarkiagamesApplicationTests.contextLoads` levanta todo el contexto y **necesita** la base de datos y las variables de entorno.
+
+---
+
+## 11. Cambios de esquema en la base de datos
+
+Con `ddl-auto=update`, Hibernate agrega columnas pero **no borra** restricciones. Después de actualizar el código, ejecuta esto una sola vez en SQL Server:
+
+1. Busca la restricción única antigua de `inscripciones`, que impedía a un espectador comprar dos veces:
+
+   ```sql
+   SELECT name FROM sys.key_constraints
+   WHERE parent_object_id = OBJECT_ID('inscripciones') AND type = 'UQ';
+   ```
+
+2. Elimínala usando el nombre que devolvió la consulta:
+
+   ```sql
+   ALTER TABLE inscripciones DROP CONSTRAINT <nombre>;
+   ```
+
+Las columnas nuevas `cantidad` y `monto` se crean solas al iniciar. Las filas existentes quedan con `cantidad = 1` y `monto = 0`, porque antes no se guardaba el monto.
+
+---
+
+## 12. Pendientes
+
+Mejoras identificadas que todavía no están implementadas:
+
+- **Infraestructura:**
+  - Perfiles dev/prod y migraciones con Flyway en lugar de `ddl-auto=update`.
+  - Mecanismo para crear el primer ADMIN (seed o comando).
+  - Tests de integración con base de datos.
+- **Administración:**
+  - Editar y cancelar torneos y tickets.
+  - Panel de stock e ingresos.
+  - Listado paginado de usuarios e inscritos.
+  - Cambio de rol de un usuario.
+- **Negocio:**
+  - Estados de la inscripción (pendiente, pagada, cancelada, reembolsada).
+  - Código QR y check-in en el evento.
+  - Correo de confirmación y recuperación de contraseña.
+  - Datos del competidor (gamer tag, equipo).
+- **Otros:**
+  - Documentación OpenAPI (springdoc).
+  - Actuator `/health`.
+  - Límite de intentos en el login.
+- **Pagos:** obtener llaves de prueba de Culqi o agregar `MercadoPagoPaymentGateway`.
