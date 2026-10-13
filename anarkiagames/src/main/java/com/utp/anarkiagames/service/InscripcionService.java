@@ -14,11 +14,14 @@ import com.utp.anarkiagames.repository.TorneoRepository;
 import com.utp.anarkiagames.service.payment.PaymentGateway;
 import com.utp.anarkiagames.service.payment.PaymentResult;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class InscripcionService {
@@ -27,8 +30,14 @@ public class InscripcionService {
     private final TorneoRepository torneoRepository;
     private final PaymentGateway paymentGateway;
 
-    public InscripcionResponse comprar(final Long torneoId, final InscripcionRequest request, final User usuario) throws Exception {
-        final Torneo torneo = torneoRepository.findById(torneoId)
+    /**
+     * Compra un ticket. El torneo queda bloqueado durante toda la compra, así dos compras
+     * simultáneas no pueden superar el stock. Si el cobro pasa pero la inscripción no se
+     * puede guardar, el cargo se reembolsa.
+     */
+    @Transactional
+    public InscripcionResponse comprar(final Long torneoId, final InscripcionRequest request, final User usuario) {
+        final Torneo torneo = torneoRepository.findByIdForUpdate(torneoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Torneo no encontrado"));
 
         final TipoTicket tipoTicket = tipoTicketRepository.findByTorneoAndTipo(torneo, request.tipo())
@@ -43,9 +52,10 @@ public class InscripcionService {
             throw new ConflictoException("No hay más cupos disponibles para " + request.tipo());
         }
 
+        final long monto = tipoTicket.getPrecio();
         final PaymentResult resultado = paymentGateway.cobrar(
                 request.tokenId(),
-                tipoTicket.getPrecio(),
+                monto,
                 usuario.getEmail(),
                 "Ticket " + request.tipo() + " - " + torneo.getNombre()
         );
@@ -61,7 +71,13 @@ public class InscripcionService {
                 .culqiChargeId(resultado.referenciaId())
                 .build();
 
-        final Inscripcion guardada = inscripcionRepository.save(inscripcion);
+        final Inscripcion guardada;
+        try {
+            guardada = inscripcionRepository.saveAndFlush(inscripcion);
+        } catch (RuntimeException e) {
+            reembolsar(resultado.referenciaId(), monto);
+            throw e;
+        }
 
         return new InscripcionResponse(
                 guardada.getId(),
@@ -70,6 +86,7 @@ public class InscripcionService {
                 guardada.getFechaCompra()
         );
     }
+
     public List<MiInscripcionResponse> listarMisInscripciones(final User usuario) {
         return inscripcionRepository.findByUsuario(usuario).stream()
                 .map(i -> new MiInscripcionResponse(
@@ -82,5 +99,13 @@ public class InscripcionService {
                         i.getFechaCompra()
                 ))
                 .toList();
+    }
+
+    private void reembolsar(final String referenciaId, final long monto) {
+        final PaymentResult reembolso = paymentGateway.reembolsar(referenciaId, monto);
+        if (!reembolso.exitoso()) {
+            // Queda un cobro sin ticket: hay que reembolsarlo a mano desde el panel de la pasarela.
+            log.error("No se pudo reembolsar el cargo {}: {}", referenciaId, reembolso.mensajeError());
+        }
     }
 }
