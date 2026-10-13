@@ -35,14 +35,6 @@ public class TipoTicketService {
 
         final TipoTicket savedTipoTicket = tipoTicketRepository.save(tipoTicket);
 
-        return new TipoTicketResponse(
-                savedTipoTicket.getId(),
-                torneo.getId(),
-                savedTipoTicket.getTipo(),
-                savedTipoTicket.getStockMaximo(),
-                savedTipoTicket.getPrecio(),
-                savedTipoTicket.getDescripcion(),
-                savedTipoTicket.getImagenUrl()
-        );
+        return TipoTicketResponse.of(savedTipoTicket, 0);
     }
 }

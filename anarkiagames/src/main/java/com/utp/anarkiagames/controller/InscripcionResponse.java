@@ -8,6 +8,8 @@ public record InscripcionResponse(
         Long id,
         Long torneoId,
         TipoParticipacion tipo,
+        int cantidad,
+        long monto,
         LocalDateTime fechaCompra
 ) {
 }

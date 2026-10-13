@@ -6,6 +6,7 @@ import com.utp.anarkiagames.controller.TorneoRequest;
 import com.utp.anarkiagames.controller.TorneoResponse;
 import com.utp.anarkiagames.exception.RecursoNoEncontradoException;
 import com.utp.anarkiagames.model.Torneo;
+import com.utp.anarkiagames.repository.InscripcionRepository;
 import com.utp.anarkiagames.repository.TipoTicketRepository;
 import com.utp.anarkiagames.repository.TorneoRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import java.util.List;
 public class TorneoService {
     private final TorneoRepository torneoRepository;
     private final TipoTicketRepository tipoTicketRepository;
+    private final InscripcionRepository inscripcionRepository;
 
     public TorneoResponse crear(final TorneoRequest request){
         final Torneo torneo = Torneo.builder()
@@ -43,9 +45,7 @@ public class TorneoService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Torneo no encontrado"));
 
         final List<TipoTicketResponse> tiposTicket = tipoTicketRepository.findByTorneo(torneo).stream()
-                .map(tt -> new TipoTicketResponse(
-                        tt.getId(), torneo.getId(), tt.getTipo(),
-                        tt.getStockMaximo(), tt.getPrecio(), tt.getDescripcion(), tt.getImagenUrl()))
+                .map(tt -> TipoTicketResponse.of(tt, inscripcionRepository.sumCantidadByTipoTicket(tt)))
                 .toList();
 
         return new TorneoDetalleResponse(
