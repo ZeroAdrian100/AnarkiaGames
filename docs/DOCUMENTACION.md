@@ -459,16 +459,15 @@ El registro público solo crea clientes. Para tener el primer ADMIN, define `ADM
 
 Después de crear el administrador puedes quitar `ADMIN_PASSWORD` del `.env`.
 
-### Ejemplo de `.env`
+### Archivo `.env`
 
+El proyecto incluye la plantilla `anarkiagames/.env.example`. Cópiala como `anarkiagames/.env` y completa los valores:
+
+```bash
+cp anarkiagames/.env.example anarkiagames/.env
 ```
-URL_DATABASE=jdbc:sqlserver://localhost:1433;databaseName=anarkiagames;encrypt=false
-USER_DATABASE=sa
-PASSWORD_DATABASE=<tu_contraseña>
-JWT_SECRET=<clave_base64>
-ADMIN_EMAIL=admin@anarkiagames.com
-ADMIN_PASSWORD=<contraseña_admin>
-```
+
+`spring-dotenv` lee el `.env` de la carpeta desde donde se ejecuta la app (`anarkiagames`). Como alternativa, puedes definir las mismas variables en la configuración de ejecución de tu IDE.
 
 Una forma de generar `JWT_SECRET`:
 
