@@ -5,13 +5,15 @@
 -- 1. Borra la restricción única (usuario_id, tipo_ticket_id). En las BD creadas por Hibernate
 --    el nombre es aleatorio, así que se buscan todas las UNIQUE de la tabla (solo existía esa).
 DECLARE @restriccion SYSNAME;
+DECLARE @sql NVARCHAR(400);
 SELECT TOP 1 @restriccion = name
 FROM sys.key_constraints
 WHERE parent_object_id = OBJECT_ID('inscripciones') AND type = 'UQ';
 
 WHILE @restriccion IS NOT NULL
 BEGIN
-    EXEC ('ALTER TABLE inscripciones DROP CONSTRAINT ' + QUOTENAME(@restriccion));
+    SET @sql = N'ALTER TABLE inscripciones DROP CONSTRAINT ' + QUOTENAME(@restriccion);
+    EXEC sp_executesql @sql;
     SET @restriccion = NULL;
     SELECT TOP 1 @restriccion = name
     FROM sys.key_constraints
