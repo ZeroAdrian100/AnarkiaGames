@@ -33,17 +33,6 @@ public class InscripcionService {
     private final TorneoRepository torneoRepository;
     private final PaymentGateway paymentGateway;
 
-    /**
-     * Compra tickets de un torneo. Reglas:
-     * <ul>
-     *   <li>Solo antes de la fecha de inicio del torneo.</li>
-     *   <li>Un usuario participa en un torneo como COMPETIDOR o como ESPECTADOR, nunca ambos.</li>
-     *   <li>COMPETIDOR: un único ticket. ESPECTADOR: hasta {@value #MAX_ESPECTADOR_POR_COMPRA} por compra
-     *       y puede volver a comprar.</li>
-     * </ul>
-     * El torneo queda bloqueado durante toda la compra, así dos compras simultáneas no pueden
-     * superar el stock. Si el cobro pasa pero la inscripción no se puede guardar, el cargo se reembolsa.
-     */
     @Transactional
     public InscripcionResponse comprar(final Long torneoId, final InscripcionRequest request, final User usuario) {
         final int cantidad = request.cantidadSolicitada();
@@ -139,7 +128,6 @@ public class InscripcionService {
     private void reembolsar(final String referenciaId, final long monto) {
         final PaymentResult reembolso = paymentGateway.reembolsar(referenciaId, monto);
         if (!reembolso.exitoso()) {
-            // Queda un cobro sin ticket: hay que reembolsarlo a mano desde el panel de la pasarela.
             log.error("No se pudo reembolsar el cargo {}: {}", referenciaId, reembolso.mensajeError());
         }
     }

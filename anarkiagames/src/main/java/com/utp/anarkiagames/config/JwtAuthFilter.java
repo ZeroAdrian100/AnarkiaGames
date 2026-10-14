@@ -18,11 +18,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-/**
- * Autentica la petición si trae un access token válido en "Authorization: Bearer ...".
- * Un token ausente, inválido o expirado deja la petición sin autenticar;
- * SecurityConfig decide después si la ruta lo permite o responde 401.
- */
+
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {

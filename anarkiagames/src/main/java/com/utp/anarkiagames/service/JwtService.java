@@ -12,11 +12,7 @@ import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.Map;
 
-/**
- * Emite y valida los JWT. Cada token lleva el claim {@code type} ("access" o "refresh")
- * para que un refresh token no sirva como access token ni al revés.
- * Los métodos de lectura lanzan {@link io.jsonwebtoken.JwtException} si el token es inválido o expiró.
- */
+
 @Service
 public class JwtService {
     private static final String CLAIM_TIPO = "type";
@@ -62,7 +58,7 @@ public class JwtService {
                 ;
     }
 
-    // El parser ya rechaza tokens expirados, así que solo falta comparar dueño y tipo.
+
     private boolean isTokenValid(final String token, final User user, final String tipo){
         final Claims claims = parseClaims(token);
         return user.getEmail().equals(claims.getSubject()) && tipo.equals(claims.get(CLAIM_TIPO));

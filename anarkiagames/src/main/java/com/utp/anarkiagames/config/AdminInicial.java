@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 /**
  * Crea el primer ADMIN al arrancar, porque el registro público solo crea clientes.
  * Actúa solo si app.admin.email y app.admin.password tienen valor y todavía no existe ningún ADMIN.
- * Si el email ya pertenece a un cliente, lo promueve a ADMIN sin cambiar su contraseña.
  */
 @Slf4j
 @Component

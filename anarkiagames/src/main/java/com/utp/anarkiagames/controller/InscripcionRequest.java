@@ -6,7 +6,6 @@ import jakarta.validation.constraints.Positive;
 
 public record InscripcionRequest(
         @NotNull TipoParticipacion tipo,
-        /* Opcional: si no se envía se compra 1 ticket. */
         @Positive Integer cantidad,
         String tokenId
 ) {
