@@ -77,12 +77,14 @@ Controladores REST y DTOs. Los DTOs son `record` de Java.
 | `AuthController` | `/auth` | Registro, login y renovación de token. |
 | `TorneoController` | `/torneos` | Consulta pública de torneos. |
 | `InscripcionController` | `/torneos` | Compra de tickets y listado de las inscripciones del usuario. |
-| `TorneoAdminController` | `/admin/torneos` | Creación de torneos (solo ADMIN). |
-| `TipoTicketController` | `/admin/torneos/{torneoId}/tipos-ticket` | Creación de tipos de ticket (solo ADMIN). |
+| `TorneoAdminController` | `/admin/torneos` | Crear, editar y cancelar torneos; resumen de stock e ingresos; inscritos (solo ADMIN). |
+| `TipoTicketController` | `/admin/torneos/{torneoId}/tipos-ticket` | Crear, editar y eliminar tipos de ticket (solo ADMIN). |
+| `InscripcionAdminController` | `/admin/inscripciones` | Reembolsar una compra (solo ADMIN). |
+| `UsuarioAdminController` | `/admin/usuarios` | Listar y buscar usuarios; cambiar su rol (solo ADMIN). |
 
-DTOs de entrada (validados con `@Valid`): `RegisterRequest`, `LoginRequest`, `TorneoRequest`, `TipoTicketRequest`, `InscripcionRequest`.
+DTOs de entrada (validados con `@Valid`): `RegisterRequest`, `LoginRequest`, `TorneoRequest`, `TipoTicketRequest`, `ActualizarTipoTicketRequest`, `InscripcionRequest`, `CambiarRolRequest`.
 
-DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `TipoTicketResponse`, `InscripcionResponse`, `MiInscripcionResponse`.
+DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `TipoTicketResponse`, `InscripcionResponse`, `MiInscripcionResponse`, `InscripcionAdminResponse`, `ResumenTorneoResponse`, `CancelacionResponse`, `UsuarioResponse` y `PaginaResponse<T>` (listados paginados).
 
 ### `service`
 
@@ -90,9 +92,10 @@ DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `Tip
 |---|---|
 | `AuthService` | Registra clientes (siempre con rol `CLIENTE`), autentica y renueva el access token a partir de un refresh token. |
 | `JwtService` | Genera y valida JWT. Distingue access y refresh token con el claim `type`. |
-| `TorneoService` | Crea, lista y detalla torneos. El detalle incluye los tipos de ticket con sus cupos disponibles. |
-| `TipoTicketService` | Crea el tipo de ticket de un torneo; solo uno por tipo de participación. |
-| `InscripcionService` | Compra de tickets con todas las reglas de negocio (sección 4) y listado de "mis inscripciones". |
+| `TorneoService` | Crea, lista, detalla, edita y cancela torneos, y arma el resumen de stock e ingresos. |
+| `TipoTicketService` | Crea, edita y elimina el tipo de ticket de un torneo; solo uno por tipo de participación. |
+| `InscripcionService` | Compra de tickets con todas las reglas de negocio (sección 4), "mis inscripciones", inscritos de un torneo y reembolsos. |
+| `UsuarioService` | Lista y busca usuarios; cambia su rol. |
 
 ### `service.payment`
 
@@ -107,10 +110,10 @@ DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `Tip
 
 | Interfaz | Consultas relevantes |
 |---|---|
-| `UserRepository` | `findByEmail`, `existsByEmail`, `existsByRole`. |
-| `TorneoRepository` | `findByIdForUpdate`: lee el torneo con bloqueo pesimista (`PESSIMISTIC_WRITE`). |
+| `UserRepository` | `findByEmail`, `existsByEmail`, `existsByRole`, búsqueda paginada por nombre o email. |
+| `TorneoRepository` | `findByIdForUpdate`: lee el torneo con bloqueo pesimista (`PESSIMISTIC_WRITE`). `marcarCancelado`. |
 | `TipoTicketRepository` | `findByTorneo`, `findByTorneoAndTipo`. |
-| `InscripcionRepository` | `findByUsuario`, `existsByUsuarioAndTipoTicket`, `existsConOtroTipoEnTorneo`, `sumCantidadByTipoTicket` (tickets vendidos). |
+| `InscripcionRepository` | `findByUsuario`, `findByTipoTicketTorneo` (paginado), `existsConOtroTipoEnTorneo`, `sumCantidadByTipoTicket` (vendidos) y `sumMontoByTipoTicket` (ingresos), solo de compras `PAGADA`. `cambiarEstado` actualiza el estado solo si no cambió antes. |
 
 ### `exception`
 
@@ -120,6 +123,7 @@ DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `Tip
 | `RecursoNoEncontradoException` | 404 |
 | `ConflictoException` | 409 |
 | `PagoRechazadoException` | 402 |
+| `ErrorPasarelaException` | 502 |
 | `GlobalExceptionHandler` | Convierte toda excepción en un `ErrorResponse` (sección 7). |
 
 ### `model`
@@ -155,6 +159,7 @@ users 1 ──── * inscripciones * ──── 1 tipo_tickets * ───�
 | `nombre` | `String` | Obligatorio. |
 | `juego` | `String` | Obligatorio. |
 | `fechaInicio` | `LocalDateTime` | Obligatorio. La venta cierra en esta fecha. |
+| `estado` | `EstadoTorneo` | `ACTIVO` (por defecto) o `CANCELADO`. |
 | `createdAt` | `LocalDateTime` | `@CreationTimestamp`. |
 
 ### `TipoTicket` → tabla `tipo_tickets`
@@ -184,6 +189,8 @@ Una compra. Un espectador puede tener varias inscripciones en el mismo torneo.
 | `monto` | `long` | Total cobrado en céntimos (`precio × cantidad`). |
 | `fechaCompra` | `LocalDateTime` | Momento de la compra. |
 | `referenciaPago` | `String` | Id del cargo en la pasarela. Columna `culqi_charge_id`. |
+| `estado` | `EstadoInscripcion` | `PAGADA` (por defecto) o `REEMBOLSADA`. Solo las `PAGADA` cuentan para el stock, los ingresos y las reglas de compra. |
+| `referenciaReembolso` | `String` | Id del reembolso en la pasarela, si se reembolsó. |
 
 ---
 
@@ -191,7 +198,7 @@ Una compra. Un espectador puede tener varias inscripciones en el mismo torneo.
 
 Todas se aplican en `InscripcionService.comprar`:
 
-1. **Venta solo antes del inicio.** Si `fechaInicio` ya pasó, la compra devuelve 409.
+1. **Venta solo en torneos activos y antes del inicio.** Si el torneo está `CANCELADO` o `fechaInicio` ya pasó, la compra devuelve 409.
 2. **Un tipo de participación por torneo.** Si el usuario ya tiene una inscripción del otro tipo en ese torneo, devuelve 409.
 3. **Competidor:**
    - Solo puede pedir 1 ticket. Si pide más, devuelve 400.
@@ -199,7 +206,7 @@ Todas se aplican en `InscripcionService.comprar`:
 4. **Espectador:**
    - Puede pedir hasta `MAX_ESPECTADOR_POR_COMPRA` (5) tickets por compra. Si pide más, devuelve 400.
    - Puede comprar varias veces.
-5. **Stock.** Los tickets vendidos son la suma de `cantidad` de las inscripciones de ese tipo. Si la cantidad pedida supera los disponibles, devuelve 409.
+5. **Stock.** Los tickets vendidos son la suma de `cantidad` de las inscripciones `PAGADA` de ese tipo; un reembolso libera los cupos. Si la cantidad pedida supera los disponibles, devuelve 409.
 6. **Concurrencia.** El método es `@Transactional` y bloquea la fila del torneo (`findByIdForUpdate`) hasta terminar. Dos compras del mismo torneo se ejecutan una después de la otra, así que el stock nunca se supera.
 7. **Pago.** Se cobra `precio × cantidad`. Si el pago es rechazado, devuelve 402 y no se guarda nada.
 8. **Reembolso automático.** Si el cobro pasa pero la inscripción no se puede guardar, se llama a `PaymentGateway.reembolsar`. Si el reembolso también falla, el error queda en el log con la referencia del cargo para reembolsarlo a mano.
@@ -208,7 +215,20 @@ Otras reglas:
 
 - El registro público siempre crea usuarios `CLIENTE`. El primer `ADMIN` se crea con `AdminInicial` (sección 9).
 - Un torneo admite un solo tipo de ticket por tipo de participación (`TipoTicketService`).
-- Al crear un torneo, `fechaInicio` debe estar en el futuro (`@Future`).
+- Al crear o editar un torneo, `fechaInicio` debe estar en el futuro (`@Future`).
+- Las compras reembolsadas no cuentan para las reglas 2 y 3: un competidor reembolsado puede volver a inscribirse, incluso como espectador.
+
+### Administración
+
+- **Editar un torneo:** solo si no está `CANCELADO`.
+- **Cancelar un torneo:**
+  1. El torneo pasa a `CANCELADO`. Si hay una compra en curso, la cancelación espera a que termine; las siguientes compras ya ven el torneo cancelado.
+  2. Se reembolsa cada compra `PAGADA`. Cada reembolso se guarda por separado, así un fallo no deshace los reembolsos que la pasarela ya hizo.
+  3. La respuesta indica cuántas compras se reembolsaron y cuántas quedaron pendientes. Las pendientes siguen `PAGADA`: se reintentan cancelando de nuevo, o reembolsándolas una por una.
+- **Reembolsar una compra:** la compra se marca `REEMBOLSADA` *antes* de llamar a la pasarela. Si dos admins la reembolsan a la vez, solo uno gana el cambio de estado y la pasarela no reembolsa dos veces. Si la pasarela falla, la compra vuelve a `PAGADA` y la API responde 502.
+- **Editar un tipo de ticket:** se puede cambiar stock, precio, descripción e imagen, pero no el tipo de participación. El stock no puede quedar por debajo de lo vendido. El nuevo precio solo afecta a las compras futuras. La edición bloquea el torneo igual que una compra.
+- **Eliminar un tipo de ticket:** solo si nunca tuvo ventas, ni siquiera reembolsadas, para conservar el historial.
+- **Cambiar el rol de un usuario:** un admin no puede cambiar su propio rol. Así siempre queda al menos un `ADMIN`.
 
 ---
 
@@ -342,10 +362,12 @@ Errores: 400, 401, 402 (pago rechazado), 404 (torneo o tipo de ticket inexistent
   {
     "inscripcionId": 15, "torneoId": 1, "torneoNombre": "Copa Anarkia",
     "juego": "Tekken 8", "fechaInicioTorneo": "2026-11-20T18:00:00",
-    "tipo": "ESPECTADOR", "cantidad": 3, "fechaCompra": "2026-10-13T12:30:00"
+    "tipo": "ESPECTADOR", "cantidad": 3, "estado": "PAGADA", "fechaCompra": "2026-10-13T12:30:00"
   }
 ]
 ```
+
+`GET /torneos` y `GET /torneos/{torneoId}` también devuelven el campo `estado` del torneo (`ACTIVO` o `CANCELADO`).
 
 ### Administración (rol ADMIN)
 
@@ -367,6 +389,89 @@ Validaciones: `tipo` es obligatorio; `stockMaximo` y `precio` deben ser mayores 
 
 Errores: 404 (torneo inexistente) y 409 (ya existe ese tipo de ticket en el torneo).
 
+#### `PUT /admin/torneos/{torneoId}` → 200
+
+Mismo cuerpo y validaciones que la creación. Errores: 404, y 409 si el torneo está cancelado.
+
+#### `POST /admin/torneos/{torneoId}/cancelar` → 200
+
+Sin cuerpo. Cancela el torneo y reembolsa sus compras (sección 4). Se puede repetir para reintentar los reembolsos pendientes.
+
+```json
+{ "torneoId": 1, "reembolsadas": 12, "pendientes": 0 }
+```
+
+#### `GET /admin/torneos/{torneoId}/resumen` → 200
+
+```json
+{
+  "torneoId": 1, "nombre": "Copa Anarkia", "estado": "ACTIVO",
+  "tiposTicket": [
+    { "tipoTicketId": 3, "tipo": "ESPECTADOR", "precio": 2500, "stockMaximo": 100,
+      "vendidos": 13, "disponibles": 87, "ingresos": 32500 }
+  ],
+  "ingresosTotales": 32500
+}
+```
+
+Solo cuenta las compras `PAGADA`. Los montos van en céntimos.
+
+#### `GET /admin/torneos/{torneoId}/inscripciones` → 200
+
+Compras del torneo, paginadas. Parámetros: `page` (desde 0), `size` (por defecto 20, máximo 100) y `sort` (por defecto `fechaCompra,desc`).
+
+```json
+{
+  "contenido": [
+    {
+      "id": 15, "usuarioId": 4, "usuarioNombre": "Ana", "usuarioEmail": "ana@mail.com",
+      "tipo": "ESPECTADOR", "cantidad": 3, "monto": 7500, "estado": "PAGADA",
+      "fechaCompra": "2026-10-13T12:30:00", "referenciaPago": "chr_...", "referenciaReembolso": null
+    }
+  ],
+  "pagina": 0, "tamano": 20, "totalElementos": 1, "totalPaginas": 1
+}
+```
+
+#### `PUT /admin/torneos/{torneoId}/tipos-ticket/{tipoTicketId}` → 200
+
+```json
+{ "stockMaximo": 120, "precio": 3000, "descripcion": "Entrada general", "imagenUrl": null }
+```
+
+La respuesta es un `TipoTicketResponse`. Errores: 400, 404 (el tipo de ticket no existe o es de otro torneo) y 409 (el stock queda por debajo de lo vendido).
+
+#### `DELETE /admin/torneos/{torneoId}/tipos-ticket/{tipoTicketId}` → 204
+
+Errores: 404, y 409 si el tipo de ticket ya tiene ventas.
+
+#### `POST /admin/inscripciones/{inscripcionId}/reembolsar` → 200
+
+Sin cuerpo. La respuesta es la compra con `estado: "REEMBOLSADA"` y su `referenciaReembolso`. Errores: 404, 409 (la compra ya fue reembolsada) y 502 (la pasarela falló; la compra sigue `PAGADA`).
+
+#### `GET /admin/usuarios` → 200
+
+Parámetros: `buscar` (opcional; filtra por nombre o email sin distinguir mayúsculas), `page`, `size` (por defecto 20, máximo 100) y `sort` (por defecto `id`).
+
+```json
+{
+  "contenido": [
+    { "id": 4, "nombre": "Ana", "email": "ana@mail.com", "role": "CLIENTE", "createdAt": "2026-10-01T09:00:00" }
+  ],
+  "pagina": 0, "tamano": 20, "totalElementos": 1, "totalPaginas": 1
+}
+```
+
+Error: 400 si `sort` usa una propiedad que no existe.
+
+#### `PATCH /admin/usuarios/{usuarioId}/rol` → 200
+
+```json
+{ "role": "ADMIN" }
+```
+
+La respuesta es el `UsuarioResponse` actualizado. Errores: 400, 404, y 409 si el admin intenta cambiar su propio rol.
+
 ---
 
 ## 7. Manejo de errores
@@ -386,9 +491,11 @@ Todo error devuelve el mismo formato (`exception.ErrorResponse`):
 |---|---|
 | Validación de DTO (`MethodArgumentNotValidException`) | 400. El mensaje lista `campo: error` separados por `;`. |
 | JSON mal formado o enum desconocido | 400 |
+| `sort` con una propiedad inexistente | 400 |
 | `SolicitudInvalidaException` | 400 |
 | Credenciales o refresh token inválidos | 401 |
 | `PagoRechazadoException` | 402 |
+| `ErrorPasarelaException` (la pasarela no pudo reembolsar) | 502 |
 | `RecursoNoEncontradoException` | 404 |
 | `ConflictoException`, violación de restricción en BD | 409 |
 | Excepciones propias de Spring MVC (ruta inexistente, método no permitido, etc.) | El status que traen |
@@ -495,8 +602,9 @@ Ejecutar todos los tests. No necesitan SQL Server, porque usan H2 en memoria:
 
 | Clase | Tipo | Qué cubre |
 |---|---|---|
-| `InscripcionServiceTest` | Unitario (Mockito) | Reglas de la sección 4: cantidades, límite por compra, tipo único por torneo, cierre de venta, stock, pago rechazado y reembolso. |
+| `InscripcionServiceTest` | Unitario (Mockito) | Reglas de la sección 4: cantidades, límite por compra, tipo único por torneo, cierre de venta, torneo cancelado, stock, pago rechazado y reembolsos (fallo de la pasarela y doble reembolso). |
 | `CompraIntegrationTest` | Integración (H2 + MockMvc) | Flujo HTTP completo: administrador inicial, creación de torneos y tickets, compras, cupos disponibles, 401/403, refresh token, validaciones y email duplicado. También valida las consultas JPQL. |
+| `AdminIntegrationTest` | Integración (H2 + MockMvc) | Panel admin: resumen de stock e ingresos, cancelación con reembolsos, reembolso individual, edición y eliminación de tipos de ticket, edición de torneos, búsqueda de usuarios, cambio de rol y paginación. |
 | `AnarkiagamesApplicationTests` | Integración | El contexto de Spring arranca. |
 
 Las migraciones de Flyway usan T-SQL y no corren en H2. Por eso los tests crean el esquema desde las entidades, y las migraciones se verifican al arrancar la app contra SQL Server.
@@ -511,17 +619,18 @@ El esquema lo maneja **Flyway**. Los scripts están en `anarkiagames/src/main/re
 |---|---|---|
 | 1 | `V1__esquema_inicial.sql` | Crea `users`, `torneos`, `tipo_tickets` e `inscripciones` como estaban antes de Flyway. |
 | 2 | `V2__compras_multiples_de_espectador.sql` | Borra la restricción única `(usuario_id, tipo_ticket_id)` de `inscripciones`, agrega `cantidad` y `monto` si no existen y estima el `monto` de las compras anteriores con el precio actual del ticket. |
+| 3 | `V3__estados_de_torneo_e_inscripcion.sql` | Agrega `torneos.estado` (`ACTIVO`) e `inscripciones.estado` (`PAGADA`) con sus restricciones `CHECK`, y la columna `inscripciones.referencia_reembolso`. |
 
 Comportamiento según la BD:
 
-- **BD vacía:** Flyway ejecuta V1 y V2.
+- **BD vacía:** Flyway ejecuta todas las migraciones en orden.
 - **BD que ya existía (creada por Hibernate con `ddl-auto=update`):** en el primer arranque, Flyway la registra como versión 1 sin ejecutar V1 (`baseline-on-migrate`) y luego ejecuta V2. V2 funciona aunque Hibernate ya haya creado `cantidad` y `monto`, y aunque la restricción ya se haya borrado a mano.
 
 Haz un respaldo de la BD antes del primer arranque con Flyway.
 
 Para cambiar el esquema en el futuro:
 
-1. Crea un script nuevo con la versión siguiente, por ejemplo `V3__descripcion.sql`.
+1. Crea un script nuevo con la versión siguiente, por ejemplo `V4__descripcion.sql`.
 2. Nunca edites un script que ya se ejecutó. Flyway guarda su checksum y falla al arrancar si cambia.
 3. Actualiza la entidad JPA. Con `ddl-auto=validate`, la app no arranca si entidad y tabla no coinciden.
 
@@ -531,13 +640,7 @@ Para cambiar el esquema en el futuro:
 
 Mejoras identificadas que todavía no están implementadas:
 
-- **Administración:**
-  - Editar y cancelar torneos y tickets.
-  - Panel de stock e ingresos.
-  - Listado paginado de usuarios e inscritos.
-  - Cambio de rol de un usuario.
 - **Negocio:**
-  - Estados de la inscripción (pendiente, pagada, cancelada, reembolsada).
   - Código QR y check-in en el evento.
   - Correo de confirmación y recuperación de contraseña.
   - Datos del competidor (gamer tag, equipo).
