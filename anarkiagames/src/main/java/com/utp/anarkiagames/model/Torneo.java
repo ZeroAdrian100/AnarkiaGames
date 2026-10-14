@@ -27,6 +27,12 @@ public class Torneo {
     @Column(name = "fecha_inicio", nullable = false)
     private LocalDateTime fechaInicio;
 
+    /** Un torneo CANCELADO no vende tickets y sus compras se reembolsan. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private EstadoTorneo estado = EstadoTorneo.ACTIVO;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
