@@ -19,6 +19,21 @@
       "name": "app.cors.allowed-origins",
       "type": "java.util.List<java.lang.String>",
       "description": "Orígenes permitidos por CORS, separados por coma"
+    },
+    {
+      "name": "app.admin.email",
+      "type": "java.lang.String",
+      "description": "Email del administrador inicial; vacío para no crearlo"
+    },
+    {
+      "name": "app.admin.password",
+      "type": "java.lang.String",
+      "description": "Contraseña del administrador inicial (mínimo 8 caracteres)"
+    },
+    {
+      "name": "app.admin.nombre",
+      "type": "java.lang.String",
+      "description": "Nombre del administrador inicial"
     }
   ]
 }
