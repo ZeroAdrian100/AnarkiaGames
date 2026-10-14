@@ -1,6 +1,7 @@
 package com.utp.anarkiagames.controller;
 
 
+import com.utp.anarkiagames.model.EstadoInscripcion;
 import com.utp.anarkiagames.model.TipoParticipacion;
 
 import java.time.LocalDateTime;
@@ -13,6 +14,7 @@ public record MiInscripcionResponse(
         LocalDateTime fechaInicioTorneo,
         TipoParticipacion tipo,
         int cantidad,
+        EstadoInscripcion estado,
         LocalDateTime fechaCompra
 ) {
 }

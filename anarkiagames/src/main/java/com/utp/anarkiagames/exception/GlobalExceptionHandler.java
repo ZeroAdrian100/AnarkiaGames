@@ -2,6 +2,7 @@ package com.utp.anarkiagames.exception;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -44,6 +45,16 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .collect(Collectors.joining("; "));
         return construirRespuesta(HttpStatus.BAD_REQUEST, mensaje);
+    }
+
+    @ExceptionHandler(ErrorPasarelaException.class)
+    public ResponseEntity<ErrorResponse> handleErrorPasarela(ErrorPasarelaException ex) {
+        return construirRespuesta(HttpStatus.BAD_GATEWAY, ex.getMessage());
+    }
+
+    @ExceptionHandler(PropertyReferenceException.class)
+    public ResponseEntity<ErrorResponse> handleOrdenInvalido(PropertyReferenceException ex) {
+        return construirRespuesta(HttpStatus.BAD_REQUEST, "No se puede ordenar por '" + ex.getPropertyName() + "'");
     }
 
     @ExceptionHandler(AuthenticationException.class)

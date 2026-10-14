@@ -42,4 +42,14 @@ public class Inscripcion {
     /** Referencia del cargo en la pasarela de pago (Culqi o mock). */
     @Column(name = "culqi_charge_id")
     private String referenciaPago;
+
+    /** Solo las inscripciones PAGADA cuentan para el stock y las reglas de compra. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private EstadoInscripcion estado = EstadoInscripcion.PAGADA;
+
+    /** Referencia del reembolso en la pasarela, si la compra fue reembolsada. */
+    @Column(name = "referencia_reembolso")
+    private String referenciaReembolso;
 }
