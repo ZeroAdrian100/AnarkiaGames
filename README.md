@@ -9,7 +9,7 @@ Este proyecto viene del curso "Curso Integrador I" (2025). El objetivo de esta n
 - **Java 25**
 - **Spring Boot 4.1.0**
 - **Spring Security + JWT** (autenticación y autorización basada en roles)
-- **Spring Data JPA** (SQL Server)
+- **Spring Data JPA** (SQL Server) + **Flyway** (migraciones)
 - **Lombok**
 - **Culqi** (pasarela de pagos) — con un modo *mock* para desarrollo sin credenciales reales
 
