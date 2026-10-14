@@ -3,8 +3,11 @@ package com.utp.anarkiagames.service;
 import com.utp.anarkiagames.controller.InscripcionRequest;
 import com.utp.anarkiagames.controller.InscripcionResponse;
 import com.utp.anarkiagames.exception.ConflictoException;
+import com.utp.anarkiagames.exception.ErrorPasarelaException;
 import com.utp.anarkiagames.exception.PagoRechazadoException;
 import com.utp.anarkiagames.exception.SolicitudInvalidaException;
+import com.utp.anarkiagames.model.EstadoInscripcion;
+import com.utp.anarkiagames.model.EstadoTorneo;
 import com.utp.anarkiagames.model.Inscripcion;
 import com.utp.anarkiagames.model.TipoParticipacion;
 import com.utp.anarkiagames.model.TipoTicket;
@@ -96,7 +99,7 @@ class InscripcionServiceTest {
 
     @Test
     void competidorNoPuedeRepetir() {
-        when(inscripcionRepository.existsByUsuarioAndTipoTicket(usuario, competidor)).thenReturn(true);
+        when(inscripcionRepository.existsByUsuarioAndTipoTicketAndEstado(usuario, competidor, EstadoInscripcion.PAGADA)).thenReturn(true);
         assertThrows(ConflictoException.class,
                 () -> service.comprar(TORNEO_ID, pedido(TipoParticipacion.COMPETIDOR, 1), usuario));
     }
@@ -142,5 +145,37 @@ class InscripcionServiceTest {
         assertThrows(DataIntegrityViolationException.class,
                 () -> service.comprar(TORNEO_ID, pedido(TipoParticipacion.ESPECTADOR, 2), usuario));
         verify(paymentGateway).reembolsar("chr_1", 4000L);
+    }
+
+    @Test
+    void noSeVendeEnUnTorneoCancelado() {
+        torneo.setEstado(EstadoTorneo.CANCELADO);
+        assertThrows(ConflictoException.class,
+                () -> service.comprar(TORNEO_ID, pedido(TipoParticipacion.ESPECTADOR, 1), usuario));
+        verifyNoInteractions(paymentGateway);
+    }
+
+    @Test
+    void reembolsoFallidoDevuelveLaCompraAPagada() {
+        final Inscripcion inscripcion = Inscripcion.builder().id(7L).referenciaPago("chr_7").monto(4000).build();
+        when(inscripcionRepository.findById(7L)).thenReturn(Optional.of(inscripcion));
+        when(inscripcionRepository.cambiarEstado(7L, EstadoInscripcion.PAGADA, EstadoInscripcion.REEMBOLSADA))
+                .thenReturn(1);
+        when(paymentGateway.reembolsar("chr_7", 4000L)).thenReturn(new PaymentResult(false, null, "caida"));
+
+        assertThrows(ErrorPasarelaException.class, () -> service.reembolsar(7L));
+        verify(inscripcionRepository).cambiarEstado(7L, EstadoInscripcion.REEMBOLSADA, EstadoInscripcion.PAGADA);
+        verify(inscripcionRepository, never()).guardarReferenciaReembolso(anyLong(), any());
+    }
+
+    @Test
+    void noSeReembolsaDosVeces() {
+        final Inscripcion inscripcion = Inscripcion.builder().id(8L).referenciaPago("chr_8").monto(2000).build();
+        when(inscripcionRepository.findById(8L)).thenReturn(Optional.of(inscripcion));
+        when(inscripcionRepository.cambiarEstado(8L, EstadoInscripcion.PAGADA, EstadoInscripcion.REEMBOLSADA))
+                .thenReturn(0);
+
+        assertThrows(ConflictoException.class, () -> service.reembolsar(8L));
+        verify(paymentGateway, never()).reembolsar(any(), anyLong());
     }
 }
