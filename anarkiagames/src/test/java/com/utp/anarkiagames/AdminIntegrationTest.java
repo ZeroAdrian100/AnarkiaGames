@@ -203,7 +203,8 @@ class AdminIntegrationTest {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"tipo":"%s","cantidad":%d,"tokenId":"tok_ok"}""".formatted(tipo, cantidad)));
+                        {"tipo":"%s","cantidad":%d,"tokenId":"tok_ok","gamerTag":"%s"}"""
+                        .formatted(tipo, cantidad, UUID.randomUUID())));
     }
 
     private String login(final String email, final String password) throws Exception {

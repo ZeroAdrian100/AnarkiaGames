@@ -10,6 +10,8 @@ public record InscripcionResponse(
         TipoParticipacion tipo,
         int cantidad,
         long monto,
+        String gamerTag,
+        String equipo,
         LocalDateTime fechaCompra
 ) {
 }

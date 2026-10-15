@@ -76,7 +76,7 @@ class CompraIntegrationTest {
                 .andExpect(status().isCreated());
 
         comprar(cliente, torneoId, """
-                {"tipo":"COMPETIDOR","tokenId":"tok_ok"}""")
+                {"tipo":"COMPETIDOR","tokenId":"tok_ok","gamerTag":"%s"}""".formatted(UUID.randomUUID()))
                 .andExpect(status().isConflict());
     }
 
@@ -84,23 +84,23 @@ class CompraIntegrationTest {
     void competidorSoloSeInscribeUnaVez() throws Exception {
         final String cliente = registrar();
         comprar(cliente, torneoId, """
-                {"tipo":"COMPETIDOR","tokenId":"tok_ok"}""")
+                {"tipo":"COMPETIDOR","tokenId":"tok_ok","gamerTag":"%s"}""".formatted(UUID.randomUUID()))
                 .andExpect(status().isCreated());
 
         comprar(cliente, torneoId, """
-                {"tipo":"COMPETIDOR","tokenId":"tok_ok"}""")
+                {"tipo":"COMPETIDOR","tokenId":"tok_ok","gamerTag":"%s"}""".formatted(UUID.randomUUID()))
                 .andExpect(status().isConflict());
     }
 
     @Test
     void sinCuposDevuelve409() throws Exception {
         comprar(registrar(), torneoId, """
-                {"tipo":"COMPETIDOR","tokenId":"tok_ok"}""").andExpect(status().isCreated());
+                {"tipo":"COMPETIDOR","tokenId":"tok_ok","gamerTag":"%s"}""".formatted(UUID.randomUUID())).andExpect(status().isCreated());
         comprar(registrar(), torneoId, """
-                {"tipo":"COMPETIDOR","tokenId":"tok_ok"}""").andExpect(status().isCreated());
+                {"tipo":"COMPETIDOR","tokenId":"tok_ok","gamerTag":"%s"}""".formatted(UUID.randomUUID())).andExpect(status().isCreated());
 
         comprar(registrar(), torneoId, """
-                {"tipo":"COMPETIDOR","tokenId":"tok_ok"}""")
+                {"tipo":"COMPETIDOR","tokenId":"tok_ok","gamerTag":"%s"}""".formatted(UUID.randomUUID()))
                 .andExpect(status().isConflict());
     }
 
@@ -169,6 +169,36 @@ class CompraIntegrationTest {
                         .content("""
                                 {"email":"admin@test.com","password":"incorrecta"}"""))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void competidorNecesitaUnGamerTagUnicoEnElTorneo() throws Exception {
+        comprar(registrar(), torneoId, """
+                {"tipo":"COMPETIDOR","tokenId":"tok_ok"}""")
+                .andExpect(status().isBadRequest());
+
+        final String jugador = registrar();
+        comprar(jugador, torneoId, """
+                {"tipo":"COMPETIDOR","tokenId":"tok_ok","gamerTag":"ShadowKing","equipo":"Team Anarkia"}""")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.gamerTag").value("ShadowKing"))
+                .andExpect(jsonPath("$.equipo").value("Team Anarkia"));
+        comprar(registrar(), torneoId, """
+                {"tipo":"COMPETIDOR","tokenId":"tok_ok","gamerTag":"shadowking"}""")
+                .andExpect(status().isConflict());
+
+        mvc.perform(get("/torneos/mis-inscripciones").header(HttpHeaders.AUTHORIZATION, "Bearer " + jugador))
+                .andExpect(jsonPath("$[0].gamerTag").value("ShadowKing"))
+                .andExpect(jsonPath("$[0].equipo").value("Team Anarkia"));
+        mvc.perform(get("/admin/torneos/" + torneoId + "/inscripciones").header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
+                .andExpect(jsonPath("$.contenido[0].gamerTag").value("ShadowKing"));
+    }
+
+    @Test
+    void gamerTagDemasiadoLargoSeRechaza() throws Exception {
+        comprar(registrar(), torneoId, """
+                {"tipo":"COMPETIDOR","tokenId":"tok_ok","gamerTag":"%s"}""".formatted("x".repeat(51)))
+                .andExpect(status().isBadRequest());
     }
 
     // ---------- utilidades ----------

@@ -31,6 +31,12 @@ public interface InscripcionRepository extends JpaRepository<Inscripcion, Long> 
                                       @Param("torneo") Torneo torneo,
                                       @Param("tipo") TipoParticipacion tipo);
 
+    /** Otro competidor con compra pagada ya usa ese gamer tag en el torneo (sin distinguir mayúsculas). */
+    @Query("select count(i) > 0 from Inscripcion i " +
+            "where i.tipoTicket.torneo = :torneo and lower(i.gamerTag) = lower(:gamerTag) " +
+            "and i.estado = com.utp.anarkiagames.model.EstadoInscripcion.PAGADA")
+    boolean existsGamerTagEnTorneo(@Param("torneo") Torneo torneo, @Param("gamerTag") String gamerTag);
+
     /** Tickets vendidos de un tipo: suma de cantidades de las compras pagadas. */
     @Query("select coalesce(sum(i.cantidad), 0L) from Inscripcion i " +
             "where i.tipoTicket = :tipoTicket and i.estado = com.utp.anarkiagames.model.EstadoInscripcion.PAGADA")

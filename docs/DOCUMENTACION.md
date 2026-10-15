@@ -203,6 +203,8 @@ Una compra. Un espectador puede tener varias inscripciones en el mismo torneo.
 | `fechaCompra` | `LocalDateTime` | Momento de la compra. |
 | `referenciaPago` | `String` | Id del cargo en la pasarela. Columna `culqi_charge_id`. |
 | `estado` | `EstadoInscripcion` | `PAGADA` (por defecto) o `REEMBOLSADA`. Solo las `PAGADA` cuentan para el stock, los ingresos y las reglas de compra. |
+| `gamerTag` | `String` | Solo COMPETIDOR (máximo 50 caracteres). Único por torneo entre las compras `PAGADA`. |
+| `equipo` | `String` | Solo COMPETIDOR, opcional (máximo 100 caracteres). |
 | `referenciaReembolso` | `String` | Id del reembolso en la pasarela, si se reembolsó. |
 
 ### `TokenRecuperacion` → tabla `tokens_recuperacion`
@@ -239,6 +241,9 @@ Todas se aplican en `InscripcionService.comprar`:
 3. **Competidor:**
    - Solo puede pedir 1 ticket. Si pide más, devuelve 400.
    - Solo puede inscribirse una vez por torneo. Si repite, devuelve 409.
+   - Debe indicar un `gamerTag`; si falta, devuelve 400. El `equipo` es opcional.
+   - El `gamerTag` no puede repetirse en el mismo torneo, sin distinguir mayúsculas (`ShadowKing` y `shadowking` son el mismo). Si ya está usado, devuelve 409. Un competidor reembolsado libera su gamer tag.
+   - Para ESPECTADOR, `gamerTag` y `equipo` se ignoran.
 4. **Espectador:**
    - Puede pedir hasta `MAX_ESPECTADOR_POR_COMPRA` (5) tickets por compra. Si pide más, devuelve 400.
    - Puede comprar varias veces.
@@ -442,15 +447,26 @@ Error: 404 si el torneo no existe.
 |---|---|---|
 | `tipo` | Sí | `COMPETIDOR` o `ESPECTADOR`. |
 | `cantidad` | No | Por defecto 1. Competidor: 1. Espectador: 1 a 5. |
+| `gamerTag` | Para COMPETIDOR | Nombre de jugador, máximo 50 caracteres. Se ignora para ESPECTADOR. |
+| `equipo` | No | Solo COMPETIDOR, máximo 100 caracteres. |
 | `tokenId` | Con Culqi | Token de tarjeta generado en el frontend. Con el mock, `tok_rechazado` simula un rechazo. |
 
 Respuesta:
 
 ```json
-{ "id": 15, "torneoId": 1, "tipo": "ESPECTADOR", "cantidad": 3, "monto": 7500, "fechaCompra": "2026-10-13T12:30:00" }
+{
+  "id": 15, "torneoId": 1, "tipo": "ESPECTADOR", "cantidad": 3, "monto": 7500,
+  "gamerTag": null, "equipo": null, "fechaCompra": "2026-10-13T12:30:00"
+}
 ```
 
-Errores: 400, 401, 402 (pago rechazado), 404 (torneo o tipo de ticket inexistente) y 409 (venta cerrada, otro tipo ya comprado, competidor repetido o sin cupos).
+Ejemplo de compra como competidor:
+
+```json
+{ "tipo": "COMPETIDOR", "gamerTag": "ShadowKing", "equipo": "Team Anarkia", "tokenId": "tkn_..." }
+```
+
+Errores: 400, 401, 402 (pago rechazado), 404 (torneo o tipo de ticket inexistente) y 409 (venta cerrada, otro tipo ya comprado, competidor repetido, gamer tag ya usado en el torneo o sin cupos).
 
 #### `GET /torneos/mis-inscripciones` → 200
 
@@ -459,7 +475,8 @@ Errores: 400, 401, 402 (pago rechazado), 404 (torneo o tipo de ticket inexistent
   {
     "inscripcionId": 15, "torneoId": 1, "torneoNombre": "Copa Anarkia",
     "juego": "Tekken 8", "fechaInicioTorneo": "2026-11-20T18:00:00",
-    "tipo": "ESPECTADOR", "cantidad": 3, "estado": "PAGADA", "fechaCompra": "2026-10-13T12:30:00"
+    "tipo": "ESPECTADOR", "cantidad": 3, "estado": "PAGADA", "gamerTag": null, "equipo": null,
+    "fechaCompra": "2026-10-13T12:30:00"
   }
 ]
 ```
@@ -487,7 +504,7 @@ Sin cuerpo. Marca el ticket como usado.
 ```json
 {
   "codigo": "9f2c4e1a7b3d5f60c8e2a4b6d8f0e1c3", "torneoId": 1, "torneoNombre": "Copa Anarkia",
-  "tipo": "ESPECTADOR", "usuarioNombre": "Ana", "fechaUso": "2026-11-20T17:45:12"
+  "tipo": "ESPECTADOR", "usuarioNombre": "Ana", "gamerTag": null, "fechaUso": "2026-11-20T17:45:12"
 }
 ```
 
@@ -547,7 +564,7 @@ Compras del torneo, paginadas. Parámetros: `page` (desde 0), `size` (por defect
   "contenido": [
     {
       "id": 15, "usuarioId": 4, "usuarioNombre": "Ana", "usuarioEmail": "ana@mail.com",
-      "tipo": "ESPECTADOR", "cantidad": 3, "monto": 7500, "estado": "PAGADA",
+      "tipo": "ESPECTADOR", "gamerTag": null, "equipo": null, "cantidad": 3, "monto": 7500, "estado": "PAGADA",
       "fechaCompra": "2026-10-13T12:30:00", "referenciaPago": "chr_...", "referenciaReembolso": null
     }
   ],
@@ -728,8 +745,8 @@ Ejecutar todos los tests. No necesitan SQL Server, porque usan H2 en memoria:
 
 | Clase | Tipo | Qué cubre |
 |---|---|---|
-| `InscripcionServiceTest` | Unitario (Mockito) | Reglas de la sección 4: cantidades, límite por compra, tipo único por torneo, cierre de venta, torneo cancelado, stock, pago rechazado y reembolsos (fallo de la pasarela y doble reembolso). |
-| `CompraIntegrationTest` | Integración (H2 + MockMvc) | Flujo HTTP completo: administrador inicial, creación de torneos y tickets, compras, cupos disponibles, 401/403, refresh token, validaciones y email duplicado. También valida las consultas JPQL. |
+| `InscripcionServiceTest` | Unitario (Mockito) | Reglas de la sección 4: cantidades, límite por compra, tipo único por torneo, cierre de venta, torneo cancelado, stock, pago rechazado, reembolsos (fallo de la pasarela y doble reembolso) y datos del competidor (gamer tag obligatorio y único, espectador los ignora). |
+| `CompraIntegrationTest` | Integración (H2 + MockMvc) | Flujo HTTP completo: administrador inicial, creación de torneos y tickets, compras, cupos disponibles, 401/403, refresh token, validaciones, email duplicado y gamer tag obligatorio y único por torneo. También valida las consultas JPQL. |
 | `AdminIntegrationTest` | Integración (H2 + MockMvc) | Panel admin: resumen de stock e ingresos, cancelación con reembolsos, reembolso individual, edición y eliminación de tipos de ticket, edición de torneos, búsqueda de usuarios, cambio de rol y paginación. |
 | `IntentosLoginServiceTest` | Unitario | Bloqueo tras 5 fallos, vencimiento de la ventana, clave por email e IP y reinicio tras un login exitoso. |
 | `CorreoServiceTest` | Unitario | Sin remitente no envía; el correo de confirmación incluye total, fecha y códigos; un fallo SMTP no se propaga. |
@@ -753,6 +770,7 @@ El esquema lo maneja **Flyway**. Los scripts están en `anarkiagames/src/main/re
 | 3 | `V3__estados_de_torneo_e_inscripcion.sql` | Agrega `torneos.estado` (`ACTIVO`) e `inscripciones.estado` (`PAGADA`) con sus restricciones `CHECK`, y la columna `inscripciones.referencia_reembolso`. |
 | 4 | `V4__tickets.sql` | Crea `tickets` y genera un ticket por unidad para cada compra `PAGADA` anterior, con un código aleatorio de `NEWID()`. |
 | 5 | `V5__tokens_recuperacion.sql` | Crea `tokens_recuperacion` para los enlaces de recuperación de contraseña. |
+| 6 | `V6__datos_del_competidor.sql` | Agrega `inscripciones.gamer_tag` e `inscripciones.equipo`. Las compras anteriores quedan sin estos datos. |
 
 Comportamiento según la BD:
 
@@ -773,6 +791,4 @@ Para cambiar el esquema en el futuro:
 
 Mejoras identificadas que todavía no están implementadas:
 
-- **Negocio:**
-  - Datos del competidor (gamer tag, equipo).
 - **Pagos:** obtener llaves de prueba de Culqi o agregar `MercadoPagoPaymentGateway`.

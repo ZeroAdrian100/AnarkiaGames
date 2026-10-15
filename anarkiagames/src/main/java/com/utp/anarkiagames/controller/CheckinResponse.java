@@ -10,6 +10,7 @@ public record CheckinResponse(
         String torneoNombre,
         TipoParticipacion tipo,
         String usuarioNombre,
+        String gamerTag,
         LocalDateTime fechaUso
 ) {
 }

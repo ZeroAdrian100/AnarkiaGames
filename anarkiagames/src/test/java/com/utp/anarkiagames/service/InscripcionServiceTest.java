@@ -69,7 +69,8 @@ class InscripcionServiceTest {
     }
 
     private InscripcionRequest pedido(TipoParticipacion tipo, Integer cantidad) {
-        return new InscripcionRequest(tipo, cantidad, "tok_ok");
+        return new InscripcionRequest(tipo, cantidad, "tok_ok",
+                tipo == TipoParticipacion.COMPETIDOR ? "Ninja" : null, null);
     }
 
     @Test
@@ -193,5 +194,37 @@ class InscripcionServiceTest {
         assertThrows(IllegalStateException.class,
                 () -> service.comprar(TORNEO_ID, pedido(TipoParticipacion.ESPECTADOR, 1), usuario));
         verify(paymentGateway).reembolsar("chr_1", 2000L);
+    }
+
+    @Test
+    void competidorSinGamerTagSeRechaza() {
+        assertThrows(SolicitudInvalidaException.class, () -> service.comprar(TORNEO_ID,
+                new InscripcionRequest(TipoParticipacion.COMPETIDOR, 1, "tok_ok", "   ", "Equipo"), usuario));
+        verifyNoInteractions(paymentGateway);
+    }
+
+    @Test
+    void gamerTagRepetidoEnElTorneoSeRechaza() {
+        when(inscripcionRepository.existsGamerTagEnTorneo(torneo, "Ninja")).thenReturn(true);
+        assertThrows(ConflictoException.class,
+                () -> service.comprar(TORNEO_ID, pedido(TipoParticipacion.COMPETIDOR, 1), usuario));
+        verifyNoInteractions(paymentGateway);
+    }
+
+    @Test
+    void competidorGuardaGamerTagYEquipoSinEspacios() {
+        final InscripcionResponse response = service.comprar(TORNEO_ID,
+                new InscripcionRequest(TipoParticipacion.COMPETIDOR, null, "tok_ok", "  Ninja ", " Team Anarkia "), usuario);
+        assertEquals("Ninja", response.gamerTag());
+        assertEquals("Team Anarkia", response.equipo());
+    }
+
+    @Test
+    void espectadorIgnoraLosDatosDeCompetidor() {
+        final InscripcionResponse response = service.comprar(TORNEO_ID,
+                new InscripcionRequest(TipoParticipacion.ESPECTADOR, 1, "tok_ok", "Ninja", "Team"), usuario);
+        assertEquals(null, response.gamerTag());
+        assertEquals(null, response.equipo());
+        verify(inscripcionRepository, never()).existsGamerTagEnTorneo(any(), any());
     }
 }

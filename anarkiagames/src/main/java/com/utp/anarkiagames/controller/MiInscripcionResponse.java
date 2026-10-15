@@ -15,6 +15,8 @@ public record MiInscripcionResponse(
         TipoParticipacion tipo,
         int cantidad,
         EstadoInscripcion estado,
+        String gamerTag,
+        String equipo,
         LocalDateTime fechaCompra
 ) {
 }
