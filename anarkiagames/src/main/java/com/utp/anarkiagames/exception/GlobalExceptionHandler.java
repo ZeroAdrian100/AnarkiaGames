@@ -57,6 +57,11 @@ public class GlobalExceptionHandler {
         return construirRespuesta(HttpStatus.BAD_REQUEST, "No se puede ordenar por '" + ex.getPropertyName() + "'");
     }
 
+    @ExceptionHandler(DemasiadosIntentosException.class)
+    public ResponseEntity<ErrorResponse> handleDemasiadosIntentos(DemasiadosIntentosException ex) {
+        return construirRespuesta(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    }
+
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleAutenticacion(AuthenticationException ex) {
         return construirRespuesta(HttpStatus.UNAUTHORIZED, ex.getMessage());

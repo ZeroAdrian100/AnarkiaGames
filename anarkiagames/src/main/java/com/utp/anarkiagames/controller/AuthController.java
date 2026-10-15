@@ -3,6 +3,7 @@ package com.utp.anarkiagames.controller;
 import com.utp.anarkiagames.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +22,9 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@Valid @RequestBody final LoginRequest request){
-        final TokenResponse token = service.login(request);
+    public ResponseEntity<TokenResponse> login(@Valid @RequestBody final LoginRequest request,
+                                               final HttpServletRequest httpRequest){
+        final TokenResponse token = service.login(request, httpRequest.getRemoteAddr());
         return ResponseEntity.ok(token);
     }
 
