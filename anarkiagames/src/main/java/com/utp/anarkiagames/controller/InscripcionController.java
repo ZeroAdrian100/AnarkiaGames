@@ -2,6 +2,7 @@ package com.utp.anarkiagames.controller;
 
 import com.utp.anarkiagames.model.User;
 import com.utp.anarkiagames.service.InscripcionService;
+import com.utp.anarkiagames.service.TicketService;
 import lombok.RequiredArgsConstructor;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -17,6 +18,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class InscripcionController {
     private final InscripcionService service;
+    private final TicketService ticketService;
 
     @PostMapping("/{torneoId}/inscripciones")
     public ResponseEntity<InscripcionResponse> comprar(
@@ -29,5 +31,12 @@ public class InscripcionController {
     @GetMapping("/mis-inscripciones")
     public ResponseEntity<List<MiInscripcionResponse>> listarMisInscripciones(@AuthenticationPrincipal final User usuario){
         return ResponseEntity.ok(service.listarMisInscripciones(usuario));
+    }
+
+    @GetMapping("/mis-inscripciones/{inscripcionId}/tickets")
+    public ResponseEntity<List<TicketResponse>> listarTickets(
+            @PathVariable final Long inscripcionId,
+            @AuthenticationPrincipal final User usuario){
+        return ResponseEntity.ok(ticketService.listarDeInscripcion(inscripcionId, usuario));
     }
 }
