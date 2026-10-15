@@ -4,6 +4,7 @@ import com.utp.anarkiagames.controller.LoginRequest;
 import com.utp.anarkiagames.controller.RegisterRequest;
 import com.utp.anarkiagames.controller.TokenResponse;
 import com.utp.anarkiagames.exception.ConflictoException;
+import com.utp.anarkiagames.exception.DemasiadosIntentosException;
 import com.utp.anarkiagames.model.Role;
 import com.utp.anarkiagames.model.User;
 import com.utp.anarkiagames.repository.UserRepository;
@@ -24,6 +25,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final IntentosLoginService intentosLoginService;
 
     public TokenResponse register(RegisterRequest request){
         if (userRepository.existsByEmail(request.email())) {
@@ -41,7 +43,12 @@ public class AuthService {
         return new TokenResponse(jwtToken, refreshToken);
     }
 
-    public TokenResponse login(LoginRequest request){
+    public TokenResponse login(LoginRequest request, String ip){
+        final long minutos = intentosLoginService.minutosBloqueado(request.email(), ip);
+        if (minutos > 0) {
+            throw new DemasiadosIntentosException(
+                    "Demasiados intentos fallidos. Intenta de nuevo en " + minutos + " minuto(s)");
+        }
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -50,8 +57,10 @@ public class AuthService {
                     )
             );
         } catch (AuthenticationException e) {
+            intentosLoginService.registrarFallo(request.email(), ip);
             throw new BadCredentialsException("Email o contraseña incorrectos");
         }
+        intentosLoginService.registrarExito(request.email(), ip);
         var user = userRepository.findByEmail(request.email())
                 .orElseThrow();
         var jwtToken = jwtService.generateToken(user);
