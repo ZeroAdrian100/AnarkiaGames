@@ -54,6 +54,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/","/auth/**")
                                 .permitAll()
+                        .requestMatchers("/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                                .permitAll()
                         .requestMatchers(HttpMethod.GET,"/torneos/mis-inscripciones")
                                 .authenticated()
                         .requestMatchers(HttpMethod.GET,"/torneos/**")
