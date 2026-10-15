@@ -30,11 +30,12 @@ public class TicketService {
     private final InscripcionRepository inscripcionRepository;
 
     /** Crea un ticket por cada unidad de la compra. Debe llamarse dentro de la transacción de la compra. */
-    public void generar(final Inscripcion inscripcion) {
+    public List<String> generar(final Inscripcion inscripcion) {
         final List<Ticket> tickets = IntStream.range(0, inscripcion.getCantidad())
                 .mapToObj(i -> Ticket.builder().inscripcion(inscripcion).codigo(nuevoCodigo()).build())
                 .toList();
         ticketRepository.saveAllAndFlush(tickets);
+        return tickets.stream().map(Ticket::getCodigo).toList();
     }
 
     /** Tickets de una compra del usuario. Si la compra es de otro usuario responde 404, sin revelar que existe. */
