@@ -51,6 +51,8 @@ SQL Server
 | Autenticación | JWT (`jjwt` 0.12) |
 | Pagos | Culqi (`culqi-java`) o simulación |
 | Variables de entorno | `spring-dotenv` (lee un archivo `.env`) |
+| Documentación de la API | springdoc-openapi (Swagger UI) |
+| Monitoreo | Spring Boot Actuator (`/actuator/health`) |
 | Utilidades | Lombok |
 
 ---
@@ -63,6 +65,7 @@ Paquete raíz: `com.utp.anarkiagames` (en `anarkiagames/src/main/java`).
 
 | Clase | Responsabilidad |
 |---|---|
+| `OpenApiConfig` | Título de la API y esquema de seguridad `bearerAuth` (JWT) para Swagger UI. |
 | `AppConfig` | Beans de autenticación: `UserDetailsService` (busca usuarios por email), `AuthenticationProvider`, `AuthenticationManager` y `PasswordEncoder` (BCrypt). |
 | `SecurityConfig` | Cadena de filtros: CORS, sesión stateless, reglas de acceso por ruta, respuesta 401 para peticiones sin autenticar y registro de `JwtAuthFilter`. |
 | `AdminInicial` | Crea el primer ADMIN al arrancar a partir de `ADMIN_EMAIL` y `ADMIN_PASSWORD` (sección 9). |
@@ -96,6 +99,7 @@ DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `Tip
 | `TipoTicketService` | Crea, edita y elimina el tipo de ticket de un torneo; solo uno por tipo de participación. |
 | `InscripcionService` | Compra de tickets con todas las reglas de negocio (sección 4), "mis inscripciones", inscritos de un torneo y reembolsos. |
 | `UsuarioService` | Lista y busca usuarios; cambia su rol. |
+| `IntentosLoginService` | Cuenta los logins fallidos por email e IP y bloquea tras 5 fallos en 15 minutos (sección 5). |
 
 ### `service.payment`
 
@@ -124,6 +128,7 @@ DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `Tip
 | `ConflictoException` | 409 |
 | `PagoRechazadoException` | 402 |
 | `ErrorPasarelaException` | 502 |
+| `DemasiadosIntentosException` | 429 |
 | `GlobalExceptionHandler` | Convierte toda excepción en un `ErrorResponse` (sección 7). |
 
 ### `model`
@@ -252,6 +257,8 @@ Un refresh token no sirve como access token, ni un access token como refresh: `J
 | Ruta | Acceso |
 |---|---|
 | `/`, `/auth/**` | Público |
+| `/actuator/health` | Público |
+| `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**` | Público (deshabilitado en el perfil `prod`) |
 | `GET /torneos/mis-inscripciones` | Autenticado |
 | `GET /torneos/**` | Público |
 | `/admin/**` | Rol `ADMIN` |
@@ -259,6 +266,20 @@ Un refresh token no sirve como access token, ni un access token como refresh: `J
 
 - Petición sin token válido a una ruta protegida: **401**.
 - Usuario autenticado sin el rol requerido: **403**.
+
+### Límite de intentos de login
+
+`IntentosLoginService` cuenta los logins fallidos por combinación de email (sin distinguir mayúsculas) e IP:
+
+- Tras **5 fallos en 15 minutos**, el login responde **429** hasta que se cumplen los 15 minutos desde el primer fallo, aunque la contraseña sea correcta.
+- Un login exitoso reinicia el contador.
+- Se cuenta por email e IP, y no solo por email, para que un atacante no pueda bloquear la cuenta de otra persona desde su propia IP.
+- El contador vive en memoria: se reinicia al reiniciar la app y no se comparte entre varias instancias.
+
+### Documentación interactiva y health check
+
+- **Swagger UI:** `http://localhost:8080/swagger-ui.html`. Lista todos los endpoints y permite probarlos. Para los protegidos, pega el `access_token` en el botón **Authorize**. La especificación OpenAPI en JSON está en `/v3/api-docs`. En el perfil `prod` ambos están deshabilitados.
+- **Health check:** `GET /actuator/health` responde `{"status":"UP"}` si la app y la BD funcionan. Es el único endpoint de Actuator expuesto, y no muestra detalles internos.
 
 ### CORS
 
@@ -297,7 +318,7 @@ Errores: 400 (validación), 409 (email ya registrado).
 { "email": "ana@mail.com", "password": "secreta123" }
 ```
 
-Respuesta: igual que el registro. Errores: 400 y 401 ("Email o contraseña incorrectos").
+Respuesta: igual que el registro. Errores: 400, 401 ("Email o contraseña incorrectos") y 429 (demasiados intentos fallidos; ver sección 5).
 
 #### `POST /auth/refresh` → 200
 
@@ -496,6 +517,7 @@ Todo error devuelve el mismo formato (`exception.ErrorResponse`):
 | Credenciales o refresh token inválidos | 401 |
 | `PagoRechazadoException` | 402 |
 | `ErrorPasarelaException` (la pasarela no pudo reembolsar) | 502 |
+| `DemasiadosIntentosException` (login bloqueado) | 429 |
 | `RecursoNoEncontradoException` | 404 |
 | `ConflictoException`, violación de restricción en BD | 409 |
 | Excepciones propias de Spring MVC (ruta inexistente, método no permitido, etc.) | El status que traen |
@@ -525,7 +547,7 @@ Archivo base: `anarkiagames/src/main/resources/application.properties`. Los valo
 | Perfil | Cómo se activa | Diferencia |
 |---|---|---|
 | `dev` | Por defecto, si no se define `SPRING_PROFILES_ACTIVE` | Muestra el SQL de Hibernate (`application-dev.properties`). |
-| `prod` | `SPRING_PROFILES_ACTIVE=prod` | Usa solo la configuración base, sin mostrar SQL. |
+| `prod` | `SPRING_PROFILES_ACTIVE=prod` | No muestra SQL y deshabilita Swagger UI y `/v3/api-docs` (`application-prod.properties`). |
 | `test` | Lo activan los tests con `@ActiveProfiles("test")` | H2 en memoria (`src/test/resources/application-test.properties`). |
 
 ### Variables de entorno
@@ -605,6 +627,8 @@ Ejecutar todos los tests. No necesitan SQL Server, porque usan H2 en memoria:
 | `InscripcionServiceTest` | Unitario (Mockito) | Reglas de la sección 4: cantidades, límite por compra, tipo único por torneo, cierre de venta, torneo cancelado, stock, pago rechazado y reembolsos (fallo de la pasarela y doble reembolso). |
 | `CompraIntegrationTest` | Integración (H2 + MockMvc) | Flujo HTTP completo: administrador inicial, creación de torneos y tickets, compras, cupos disponibles, 401/403, refresh token, validaciones y email duplicado. También valida las consultas JPQL. |
 | `AdminIntegrationTest` | Integración (H2 + MockMvc) | Panel admin: resumen de stock e ingresos, cancelación con reembolsos, reembolso individual, edición y eliminación de tipos de ticket, edición de torneos, búsqueda de usuarios, cambio de rol y paginación. |
+| `IntentosLoginServiceTest` | Unitario | Bloqueo tras 5 fallos, vencimiento de la ventana, clave por email e IP y reinicio tras un login exitoso. |
+| `InfraestructuraIntegrationTest` | Integración (H2 + MockMvc) | `/actuator/health` público, otros endpoints de Actuator ocultos, OpenAPI y Swagger UI públicos, y login bloqueado con 429. |
 | `AnarkiagamesApplicationTests` | Integración | El contexto de Spring arranca. |
 
 Las migraciones de Flyway usan T-SQL y no corren en H2. Por eso los tests crean el esquema desde las entidades, y las migraciones se verifican al arrancar la app contra SQL Server.
@@ -644,8 +668,4 @@ Mejoras identificadas que todavía no están implementadas:
   - Código QR y check-in en el evento.
   - Correo de confirmación y recuperación de contraseña.
   - Datos del competidor (gamer tag, equipo).
-- **Otros:**
-  - Documentación OpenAPI (springdoc).
-  - Actuator `/health`.
-  - Límite de intentos en el login.
 - **Pagos:** obtener llaves de prueba de Culqi o agregar `MercadoPagoPaymentGateway`.
