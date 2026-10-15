@@ -38,6 +38,7 @@ public class InscripcionService {
     private final TipoTicketRepository tipoTicketRepository;
     private final TorneoRepository torneoRepository;
     private final PaymentGateway paymentGateway;
+    private final TicketService ticketService;
 
     /**
      * Compra tickets de un torneo. Reglas:
@@ -115,6 +116,7 @@ public class InscripcionService {
         final Inscripcion guardada;
         try {
             guardada = inscripcionRepository.saveAndFlush(inscripcion);
+            ticketService.generar(guardada);
         } catch (RuntimeException e) {
             reembolsar(resultado.referenciaId(), monto);
             throw e;

@@ -79,15 +79,16 @@ Controladores REST y DTOs. Los DTOs son `record` de Java.
 |---|---|---|
 | `AuthController` | `/auth` | Registro, login y renovación de token. |
 | `TorneoController` | `/torneos` | Consulta pública de torneos. |
-| `InscripcionController` | `/torneos` | Compra de tickets y listado de las inscripciones del usuario. |
+| `InscripcionController` | `/torneos` | Compra de tickets, listado de las inscripciones del usuario y sus códigos de ticket. |
 | `TorneoAdminController` | `/admin/torneos` | Crear, editar y cancelar torneos; resumen de stock e ingresos; inscritos (solo ADMIN). |
 | `TipoTicketController` | `/admin/torneos/{torneoId}/tipos-ticket` | Crear, editar y eliminar tipos de ticket (solo ADMIN). |
 | `InscripcionAdminController` | `/admin/inscripciones` | Reembolsar una compra (solo ADMIN). |
 | `UsuarioAdminController` | `/admin/usuarios` | Listar y buscar usuarios; cambiar su rol (solo ADMIN). |
+| `CheckinAdminController` | `/admin/checkin` | Check-in de un ticket en la puerta del evento (solo ADMIN). |
 
 DTOs de entrada (validados con `@Valid`): `RegisterRequest`, `LoginRequest`, `TorneoRequest`, `TipoTicketRequest`, `ActualizarTipoTicketRequest`, `InscripcionRequest`, `CambiarRolRequest`.
 
-DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `TipoTicketResponse`, `InscripcionResponse`, `MiInscripcionResponse`, `InscripcionAdminResponse`, `ResumenTorneoResponse`, `CancelacionResponse`, `UsuarioResponse` y `PaginaResponse<T>` (listados paginados).
+DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `TipoTicketResponse`, `InscripcionResponse`, `MiInscripcionResponse`, `InscripcionAdminResponse`, `ResumenTorneoResponse`, `CancelacionResponse`, `UsuarioResponse`, `TicketResponse`, `CheckinResponse` y `PaginaResponse<T>` (listados paginados).
 
 ### `service`
 
@@ -99,6 +100,7 @@ DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `Tip
 | `TipoTicketService` | Crea, edita y elimina el tipo de ticket de un torneo; solo uno por tipo de participación. |
 | `InscripcionService` | Compra de tickets con todas las reglas de negocio (sección 4), "mis inscripciones", inscritos de un torneo y reembolsos. |
 | `UsuarioService` | Lista y busca usuarios; cambia su rol. |
+| `TicketService` | Genera los tickets de cada compra, lista los del usuario y hace el check-in. |
 | `IntentosLoginService` | Cuenta los logins fallidos por email e IP y bloquea tras 5 fallos en 15 minutos (sección 5). |
 
 ### `service.payment`
@@ -117,6 +119,7 @@ DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `Tip
 | `UserRepository` | `findByEmail`, `existsByEmail`, `existsByRole`, búsqueda paginada por nombre o email. |
 | `TorneoRepository` | `findByIdForUpdate`: lee el torneo con bloqueo pesimista (`PESSIMISTIC_WRITE`). `marcarCancelado`. |
 | `TipoTicketRepository` | `findByTorneo`, `findByTorneoAndTipo`. |
+| `TicketRepository` | `findByInscripcionOrderByIdAsc`, `findByCodigo` y `marcarUsado` (solo si el ticket no se usó antes). |
 | `InscripcionRepository` | `findByUsuario`, `findByTipoTicketTorneo` (paginado), `existsConOtroTipoEnTorneo`, `sumCantidadByTipoTicket` (vendidos) y `sumMontoByTipoTicket` (ingresos), solo de compras `PAGADA`. `cambiarEstado` actualiza el estado solo si no cambió antes. |
 
 ### `exception`
@@ -197,6 +200,19 @@ Una compra. Un espectador puede tener varias inscripciones en el mismo torneo.
 | `estado` | `EstadoInscripcion` | `PAGADA` (por defecto) o `REEMBOLSADA`. Solo las `PAGADA` cuentan para el stock, los ingresos y las reglas de compra. |
 | `referenciaReembolso` | `String` | Id del reembolso en la pasarela, si se reembolsó. |
 
+### `Ticket` → tabla `tickets`
+
+Una entrada individual. Cada compra genera tantos tickets como su `cantidad`: un espectador que compra 3 recibe 3 códigos.
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | `Long` | PK. |
+| `inscripcion` | `Inscripcion` | FK `inscripcion_id`. |
+| `codigo` | `String` | Único. 32 caracteres hexadecimales (128 bits de `SecureRandom`). Es el valor del QR. |
+| `fechaUso` | `LocalDateTime` | Momento del check-in; `null` si no se usó. |
+
+Un ticket es **válido** si no se usó, su compra sigue `PAGADA` y el torneo está `ACTIVO`. Un reembolso o una cancelación lo invalidan sin modificar la tabla.
+
 ---
 
 ## 4. Reglas de negocio
@@ -222,6 +238,14 @@ Otras reglas:
 - Un torneo admite un solo tipo de ticket por tipo de participación (`TipoTicketService`).
 - Al crear o editar un torneo, `fechaInicio` debe estar en el futuro (`@Future`).
 - Las compras reembolsadas no cuentan para las reglas 2 y 3: un competidor reembolsado puede volver a inscribirse, incluso como espectador.
+- Cada compra genera sus tickets en la misma transacción. Si la generación falla, la compra se deshace y el cargo se reembolsa (regla 8).
+
+### Tickets y check-in
+
+- El código del ticket es lo que muestra el QR, y quien lo tiene puede entrar. Por eso es aleatorio (`SecureRandom`, 128 bits) y solo su dueño lo ve: si la compra es de otro usuario, la API responde 404 sin revelar que existe.
+- El backend entrega el código y el frontend dibuja el QR, por ejemplo con la librería `qrcode` de npm.
+- El check-in lo hace un ADMIN. Rechaza con 409 los tickets ya usados, reembolsados o de un torneo cancelado.
+- El ticket se marca como usado con un `UPDATE` condicional (`fecha_uso IS NULL`). Si dos lectores escanean el mismo QR a la vez, solo uno entra.
 
 ### Administración
 
@@ -259,7 +283,7 @@ Un refresh token no sirve como access token, ni un access token como refresh: `J
 | `/`, `/auth/**` | Público |
 | `/actuator/health` | Público |
 | `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**` | Público (deshabilitado en el perfil `prod`) |
-| `GET /torneos/mis-inscripciones` | Autenticado |
+| `GET /torneos/mis-inscripciones/**` | Autenticado |
 | `GET /torneos/**` | Público |
 | `/admin/**` | Rol `ADMIN` |
 | Cualquier otra | Autenticado |
@@ -390,7 +414,32 @@ Errores: 400, 401, 402 (pago rechazado), 404 (torneo o tipo de ticket inexistent
 
 `GET /torneos` y `GET /torneos/{torneoId}` también devuelven el campo `estado` del torneo (`ACTIVO` o `CANCELADO`).
 
+#### `GET /torneos/mis-inscripciones/{inscripcionId}/tickets` → 200
+
+Tickets de una compra del usuario, uno por unidad comprada.
+
+```json
+[
+  { "codigo": "9f2c4e1a7b3d5f60c8e2a4b6d8f0e1c3", "valido": true, "fechaUso": null }
+]
+```
+
+Errores: 401, y 404 si la compra no existe o es de otro usuario.
+
 ### Administración (rol ADMIN)
+
+#### `POST /admin/checkin/{codigo}` → 200
+
+Sin cuerpo. Marca el ticket como usado.
+
+```json
+{
+  "codigo": "9f2c4e1a7b3d5f60c8e2a4b6d8f0e1c3", "torneoId": 1, "torneoNombre": "Copa Anarkia",
+  "tipo": "ESPECTADOR", "usuarioNombre": "Ana", "fechaUso": "2026-11-20T17:45:12"
+}
+```
+
+Errores: 404 (código inexistente) y 409 (ticket ya usado, compra reembolsada o torneo cancelado).
 
 #### `POST /admin/torneos` → 201
 
@@ -628,6 +677,7 @@ Ejecutar todos los tests. No necesitan SQL Server, porque usan H2 en memoria:
 | `CompraIntegrationTest` | Integración (H2 + MockMvc) | Flujo HTTP completo: administrador inicial, creación de torneos y tickets, compras, cupos disponibles, 401/403, refresh token, validaciones y email duplicado. También valida las consultas JPQL. |
 | `AdminIntegrationTest` | Integración (H2 + MockMvc) | Panel admin: resumen de stock e ingresos, cancelación con reembolsos, reembolso individual, edición y eliminación de tipos de ticket, edición de torneos, búsqueda de usuarios, cambio de rol y paginación. |
 | `IntentosLoginServiceTest` | Unitario | Bloqueo tras 5 fallos, vencimiento de la ventana, clave por email e IP y reinicio tras un login exitoso. |
+| `TicketIntegrationTest` | Integración (H2 + MockMvc) | Un código único por unidad, solo el dueño ve sus tickets, check-in una sola vez, solo ADMIN hace check-in, y reembolso y cancelación invalidan los tickets. |
 | `InfraestructuraIntegrationTest` | Integración (H2 + MockMvc) | `/actuator/health` público, otros endpoints de Actuator ocultos, OpenAPI y Swagger UI públicos, y login bloqueado con 429. |
 | `AnarkiagamesApplicationTests` | Integración | El contexto de Spring arranca. |
 
@@ -644,6 +694,7 @@ El esquema lo maneja **Flyway**. Los scripts están en `anarkiagames/src/main/re
 | 1 | `V1__esquema_inicial.sql` | Crea `users`, `torneos`, `tipo_tickets` e `inscripciones` como estaban antes de Flyway. |
 | 2 | `V2__compras_multiples_de_espectador.sql` | Borra la restricción única `(usuario_id, tipo_ticket_id)` de `inscripciones`, agrega `cantidad` y `monto` si no existen y estima el `monto` de las compras anteriores con el precio actual del ticket. |
 | 3 | `V3__estados_de_torneo_e_inscripcion.sql` | Agrega `torneos.estado` (`ACTIVO`) e `inscripciones.estado` (`PAGADA`) con sus restricciones `CHECK`, y la columna `inscripciones.referencia_reembolso`. |
+| 4 | `V4__tickets.sql` | Crea `tickets` y genera un ticket por unidad para cada compra `PAGADA` anterior, con un código aleatorio de `NEWID()`. |
 
 Comportamiento según la BD:
 
@@ -665,7 +716,6 @@ Para cambiar el esquema en el futuro:
 Mejoras identificadas que todavía no están implementadas:
 
 - **Negocio:**
-  - Código QR y check-in en el evento.
   - Correo de confirmación y recuperación de contraseña.
   - Datos del competidor (gamer tag, equipo).
 - **Pagos:** obtener llaves de prueba de Culqi o agregar `MercadoPagoPaymentGateway`.
