@@ -42,6 +42,7 @@ class InscripcionServiceTest {
     @Mock private TipoTicketRepository tipoTicketRepository;
     @Mock private TorneoRepository torneoRepository;
     @Mock private PaymentGateway paymentGateway;
+    @Mock private TicketService ticketService;
     @InjectMocks private InscripcionService service;
 
     private final User usuario = User.builder().id(10L).email("cliente@test.com").build();
@@ -76,6 +77,7 @@ class InscripcionServiceTest {
 
         assertEquals(3, response.cantidad());
         assertEquals(6000, response.monto());
+        verify(ticketService).generar(argThat(i -> i.getCantidad() == 3));
         verify(paymentGateway).cobrar(eq("tok_ok"), eq(6000L), eq(usuario.getEmail()), any());
     }
 
@@ -177,5 +179,15 @@ class InscripcionServiceTest {
 
         assertThrows(ConflictoException.class, () -> service.reembolsar(8L));
         verify(paymentGateway, never()).reembolsar(any(), anyLong());
+    }
+
+    @Test
+    void siFallaLaGeneracionDeTicketsSeReembolsaElCargo() {
+        doThrow(new IllegalStateException("codigo duplicado")).when(ticketService).generar(any());
+        when(paymentGateway.reembolsar(any(), anyLong())).thenReturn(new PaymentResult(true, "ref_2", null));
+
+        assertThrows(IllegalStateException.class,
+                () -> service.comprar(TORNEO_ID, pedido(TipoParticipacion.ESPECTADOR, 1), usuario));
+        verify(paymentGateway).reembolsar("chr_1", 2000L);
     }
 }
