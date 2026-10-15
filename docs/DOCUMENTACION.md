@@ -65,6 +65,7 @@ Paquete raíz: `com.utp.anarkiagames` (en `anarkiagames/src/main/java`).
 
 | Clase | Responsabilidad |
 |---|---|
+| `AsyncConfig` | Habilita `@Async`: los correos se envían en otro hilo. |
 | `OpenApiConfig` | Título de la API y esquema de seguridad `bearerAuth` (JWT) para Swagger UI. |
 | `AppConfig` | Beans de autenticación: `UserDetailsService` (busca usuarios por email), `AuthenticationProvider`, `AuthenticationManager` y `PasswordEncoder` (BCrypt). |
 | `SecurityConfig` | Cadena de filtros: CORS, sesión stateless, reglas de acceso por ruta, respuesta 401 para peticiones sin autenticar y registro de `JwtAuthFilter`. |
@@ -77,7 +78,7 @@ Controladores REST y DTOs. Los DTOs son `record` de Java.
 
 | Clase | Ruta base | Descripción |
 |---|---|---|
-| `AuthController` | `/auth` | Registro, login y renovación de token. |
+| `AuthController` | `/auth` | Registro, login, renovación de token y recuperación de contraseña. |
 | `TorneoController` | `/torneos` | Consulta pública de torneos. |
 | `InscripcionController` | `/torneos` | Compra de tickets, listado de las inscripciones del usuario y sus códigos de ticket. |
 | `TorneoAdminController` | `/admin/torneos` | Crear, editar y cancelar torneos; resumen de stock e ingresos; inscritos (solo ADMIN). |
@@ -86,14 +87,17 @@ Controladores REST y DTOs. Los DTOs son `record` de Java.
 | `UsuarioAdminController` | `/admin/usuarios` | Listar y buscar usuarios; cambiar su rol (solo ADMIN). |
 | `CheckinAdminController` | `/admin/checkin` | Check-in de un ticket en la puerta del evento (solo ADMIN). |
 
-DTOs de entrada (validados con `@Valid`): `RegisterRequest`, `LoginRequest`, `TorneoRequest`, `TipoTicketRequest`, `ActualizarTipoTicketRequest`, `InscripcionRequest`, `CambiarRolRequest`.
+DTOs de entrada (validados con `@Valid`): `RegisterRequest`, `LoginRequest`, `TorneoRequest`, `TipoTicketRequest`, `ActualizarTipoTicketRequest`, `InscripcionRequest`, `CambiarRolRequest`, `RecuperarPasswordRequest`, `RestablecerPasswordRequest`.
 
-DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `TipoTicketResponse`, `InscripcionResponse`, `MiInscripcionResponse`, `InscripcionAdminResponse`, `ResumenTorneoResponse`, `CancelacionResponse`, `UsuarioResponse`, `TicketResponse`, `CheckinResponse` y `PaginaResponse<T>` (listados paginados).
+DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `TipoTicketResponse`, `InscripcionResponse`, `MiInscripcionResponse`, `InscripcionAdminResponse`, `ResumenTorneoResponse`, `CancelacionResponse`, `UsuarioResponse`, `TicketResponse`, `CheckinResponse`, `MensajeResponse` y `PaginaResponse<T>` (listados paginados).
 
 ### `service`
 
 | Clase | Responsabilidad |
 |---|---|
+| `CorreoService` | Envía los correos (confirmación de compra y recuperación de contraseña) en otro hilo. Sin `MAIL_USERNAME`, los escribe en el log. |
+| `NotificacionesListener` | Escucha `CompraConfirmadaEvent` y pide el correo de confirmación **después del commit** de la compra. |
+| `RecuperacionPasswordService` | Genera los enlaces de recuperación y cambia la contraseña con un token válido. |
 | `AuthService` | Registra clientes (siempre con rol `CLIENTE`), autentica y renueva el access token a partir de un refresh token. |
 | `JwtService` | Genera y valida JWT. Distingue access y refresh token con el claim `type`. |
 | `TorneoService` | Crea, lista, detalla, edita y cancela torneos, y arma el resumen de stock e ingresos. |
@@ -119,6 +123,7 @@ DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `Tip
 | `UserRepository` | `findByEmail`, `existsByEmail`, `existsByRole`, búsqueda paginada por nombre o email. |
 | `TorneoRepository` | `findByIdForUpdate`: lee el torneo con bloqueo pesimista (`PESSIMISTIC_WRITE`). `marcarCancelado`. |
 | `TipoTicketRepository` | `findByTorneo`, `findByTorneoAndTipo`. |
+| `TokenRecuperacionRepository` | `findByTokenHash`, `eliminarPendientes` y `marcarUsado` (solo si el token no se usó antes). |
 | `TicketRepository` | `findByInscripcionOrderByIdAsc`, `findByCodigo` y `marcarUsado` (solo si el ticket no se usó antes). |
 | `InscripcionRepository` | `findByUsuario`, `findByTipoTicketTorneo` (paginado), `existsConOtroTipoEnTorneo`, `sumCantidadByTipoTicket` (vendidos) y `sumMontoByTipoTicket` (ingresos), solo de compras `PAGADA`. `cambiarEstado` actualiza el estado solo si no cambió antes. |
 
@@ -199,6 +204,16 @@ Una compra. Un espectador puede tener varias inscripciones en el mismo torneo.
 | `referenciaPago` | `String` | Id del cargo en la pasarela. Columna `culqi_charge_id`. |
 | `estado` | `EstadoInscripcion` | `PAGADA` (por defecto) o `REEMBOLSADA`. Solo las `PAGADA` cuentan para el stock, los ingresos y las reglas de compra. |
 | `referenciaReembolso` | `String` | Id del reembolso en la pasarela, si se reembolsó. |
+
+### `TokenRecuperacion` → tabla `tokens_recuperacion`
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | `Long` | PK. |
+| `usuario` | `User` | FK `usuario_id`. |
+| `tokenHash` | `String` | SHA-256 del token enviado por correo. El token en claro nunca se guarda. |
+| `expiraEn` | `LocalDateTime` | Momento en que vence (15 minutos, `jwt.reset.expiration`). |
+| `usadoEn` | `LocalDateTime` | `null` hasta que se usa; cada token sirve una sola vez. |
 
 ### `Ticket` → tabla `tickets`
 
@@ -291,6 +306,21 @@ Un refresh token no sirve como access token, ni un access token como refresh: `J
 - Petición sin token válido a una ruta protegida: **401**.
 - Usuario autenticado sin el rol requerido: **403**.
 
+### Recuperación de contraseña
+
+1. `POST /auth/olvide-password` responde siempre lo mismo, exista o no el email, para no revelar qué emails tienen cuenta.
+2. Si el email existe, se borran sus enlaces pendientes y se envía uno nuevo: `{FRONTEND_URL}/restablecer-password?token=...`. El token tiene 256 bits aleatorios y en la BD solo se guarda su hash SHA-256.
+3. `POST /auth/restablecer-password` acepta el token si existe, no se usó y no venció (15 minutos). Lo marca como usado con un `UPDATE` condicional, así un enlace no sirve dos veces aunque llegue dos veces a la vez.
+4. Los JWT emitidos antes del cambio siguen siendo válidos hasta que vencen, porque los tokens no se guardan en el servidor.
+
+### Correos
+
+- Se envían por SMTP (Gmail, puerto 587 con STARTTLS) usando `MAIL_USERNAME` y una contraseña de aplicación en `MAIL_PASSWORD`.
+- Se envían en otro hilo (`@Async`). Un fallo de envío queda en el log y no afecta a la compra ni al pedido de recuperación.
+- La confirmación de compra se envía solo después del commit (`@TransactionalEventListener(AFTER_COMMIT)`): si la compra se deshace, no sale ningún correo. Incluye torneo, fecha, tipo, cantidad, total y los códigos de los tickets.
+- Sin `MAIL_USERNAME`, el contenido del correo se escribe en el log, incluido el enlace de recuperación. Sirve en desarrollo; en producción hay que configurar el SMTP.
+- El health check de correo de Actuator está deshabilitado, para no abrir una conexión SMTP en cada consulta a `/actuator/health`.
+
 ### Límite de intentos de login
 
 `IntentosLoginService` cuenta los logins fallidos por combinación de email (sin distinguir mayúsculas) e IP:
@@ -349,6 +379,28 @@ Respuesta: igual que el registro. Errores: 400, 401 ("Email o contraseña incorr
 Header: `Authorization: Bearer <refresh_token>`.
 
 Respuesta: un `access_token` nuevo y el mismo `refresh_token`. Error: 401 si el token es inválido, expirado o no es de tipo refresh.
+
+#### `POST /auth/olvide-password` → 200
+
+```json
+{ "email": "ana@mail.com" }
+```
+
+Respuesta (igual exista o no el email):
+
+```json
+{ "mensaje": "Si el email está registrado, te enviamos un enlace para restablecer la contraseña" }
+```
+
+Error: 400 si el email no tiene formato válido.
+
+#### `POST /auth/restablecer-password` → 200
+
+```json
+{ "token": "<token del enlace>", "password": "nuevaClave99" }
+```
+
+Respuesta: `{ "mensaje": "Contraseña actualizada" }`. Error: 400 si el token es inválido, ya se usó o venció, o si la contraseña no tiene entre 8 y 72 caracteres.
 
 ### Torneos (público)
 
@@ -609,6 +661,9 @@ Archivo base: `anarkiagames/src/main/resources/application.properties`. Los valo
 | `JWT_SECRET` | `jwt.secret` | Sí | Clave en Base64 de al menos 256 bits. |
 | `PAYMENT_GATEWAY` | `payment.gateway` | No | `mock` (por defecto) o `culqi`. |
 | `CULQI_SECRET_KEY` | `culqi.secret_key` | Solo con Culqi | Llave secreta (`sk_test_...` o `sk_live_...`). |
+| `MAIL_USERNAME` | `spring.mail.username` | No | Cuenta de Gmail que envía los correos. Sin valor, los correos se escriben en el log. |
+| `MAIL_PASSWORD` | `spring.mail.password` | No | Contraseña de aplicación de Google (no la contraseña de la cuenta). |
+| `FRONTEND_URL` | `app.frontend-url` | No | Base de los enlaces de los correos. Por defecto `http://localhost:5173`. |
 | `CORS_ALLOWED_ORIGINS` | `app.cors.allowed-origins` | No | Orígenes separados por coma. Por defecto `http://localhost:5173`. |
 | `ADMIN_EMAIL` | `app.admin.email` | No | Email del administrador inicial. |
 | `ADMIN_PASSWORD` | `app.admin.password` | No | Contraseña del administrador inicial (mínimo 8 caracteres). |
@@ -677,6 +732,8 @@ Ejecutar todos los tests. No necesitan SQL Server, porque usan H2 en memoria:
 | `CompraIntegrationTest` | Integración (H2 + MockMvc) | Flujo HTTP completo: administrador inicial, creación de torneos y tickets, compras, cupos disponibles, 401/403, refresh token, validaciones y email duplicado. También valida las consultas JPQL. |
 | `AdminIntegrationTest` | Integración (H2 + MockMvc) | Panel admin: resumen de stock e ingresos, cancelación con reembolsos, reembolso individual, edición y eliminación de tipos de ticket, edición de torneos, búsqueda de usuarios, cambio de rol y paginación. |
 | `IntentosLoginServiceTest` | Unitario | Bloqueo tras 5 fallos, vencimiento de la ventana, clave por email e IP y reinicio tras un login exitoso. |
+| `CorreoServiceTest` | Unitario | Sin remitente no envía; el correo de confirmación incluye total, fecha y códigos; un fallo SMTP no se propaga. |
+| `CorreoIntegrationTest` | Integración (H2 + MockMvc) | La compra dispara el correo con los códigos; restablecer la contraseña con el enlace; un enlace no sirve dos veces; un pedido nuevo invalida el anterior; enlace vencido; email no registrado; token inventado. |
 | `TicketIntegrationTest` | Integración (H2 + MockMvc) | Un código único por unidad, solo el dueño ve sus tickets, check-in una sola vez, solo ADMIN hace check-in, y reembolso y cancelación invalidan los tickets. |
 | `InfraestructuraIntegrationTest` | Integración (H2 + MockMvc) | `/actuator/health` público, otros endpoints de Actuator ocultos, OpenAPI y Swagger UI públicos, y login bloqueado con 429. |
 | `AnarkiagamesApplicationTests` | Integración | El contexto de Spring arranca. |
@@ -695,6 +752,7 @@ El esquema lo maneja **Flyway**. Los scripts están en `anarkiagames/src/main/re
 | 2 | `V2__compras_multiples_de_espectador.sql` | Borra la restricción única `(usuario_id, tipo_ticket_id)` de `inscripciones`, agrega `cantidad` y `monto` si no existen y estima el `monto` de las compras anteriores con el precio actual del ticket. |
 | 3 | `V3__estados_de_torneo_e_inscripcion.sql` | Agrega `torneos.estado` (`ACTIVO`) e `inscripciones.estado` (`PAGADA`) con sus restricciones `CHECK`, y la columna `inscripciones.referencia_reembolso`. |
 | 4 | `V4__tickets.sql` | Crea `tickets` y genera un ticket por unidad para cada compra `PAGADA` anterior, con un código aleatorio de `NEWID()`. |
+| 5 | `V5__tokens_recuperacion.sql` | Crea `tokens_recuperacion` para los enlaces de recuperación de contraseña. |
 
 Comportamiento según la BD:
 
@@ -716,6 +774,5 @@ Para cambiar el esquema en el futuro:
 Mejoras identificadas que todavía no están implementadas:
 
 - **Negocio:**
-  - Correo de confirmación y recuperación de contraseña.
   - Datos del competidor (gamer tag, equipo).
 - **Pagos:** obtener llaves de prueba de Culqi o agregar `MercadoPagoPaymentGateway`.
