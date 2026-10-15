@@ -70,6 +70,7 @@ public class TicketService {
                 torneo.getNombre(),
                 inscripcion.getTipoTicket().getTipo(),
                 inscripcion.getUsuario().getNombre(),
+                inscripcion.getGamerTag(),
                 ahora
         );
     }

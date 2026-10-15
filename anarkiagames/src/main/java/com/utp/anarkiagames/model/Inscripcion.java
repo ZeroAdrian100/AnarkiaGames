@@ -49,6 +49,14 @@ public class Inscripcion {
     @Builder.Default
     private EstadoInscripcion estado = EstadoInscripcion.PAGADA;
 
+    /** Solo para COMPETIDOR: nombre de jugador, único por torneo. */
+    @Column(name = "gamer_tag", length = 50)
+    private String gamerTag;
+
+    /** Solo para COMPETIDOR, opcional. */
+    @Column(length = 100)
+    private String equipo;
+
     /** Referencia del reembolso en la pasarela, si la compra fue reembolsada. */
     @Column(name = "referencia_reembolso")
     private String referenciaReembolso;

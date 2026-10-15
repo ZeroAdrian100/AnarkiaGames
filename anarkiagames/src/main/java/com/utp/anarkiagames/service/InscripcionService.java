@@ -75,12 +75,20 @@ public class InscripcionService {
             throw new ConflictoException("Ya estás inscrito en este torneo con otro tipo de participación");
         }
 
-        if (request.tipo() == TipoParticipacion.COMPETIDOR) {
+        final boolean esCompetidor = request.tipo() == TipoParticipacion.COMPETIDOR;
+        final String gamerTag = esCompetidor ? limpiar(request.gamerTag()) : null;
+        if (esCompetidor) {
             if (cantidad != 1) {
                 throw new SolicitudInvalidaException("Un competidor solo puede comprar 1 ticket");
             }
+            if (gamerTag == null) {
+                throw new SolicitudInvalidaException("El gamer tag es obligatorio para competir");
+            }
             if (inscripcionRepository.existsByUsuarioAndTipoTicketAndEstado(usuario, tipoTicket, EstadoInscripcion.PAGADA)) {
                 throw new ConflictoException("Ya estás inscrito como competidor en este torneo");
+            }
+            if (inscripcionRepository.existsGamerTagEnTorneo(torneo, gamerTag)) {
+                throw new ConflictoException("El gamer tag " + gamerTag + " ya está inscrito en este torneo");
             }
         } else if (cantidad > MAX_ESPECTADOR_POR_COMPRA) {
             throw new SolicitudInvalidaException(
@@ -111,6 +119,8 @@ public class InscripcionService {
                 .tipoTicket(tipoTicket)
                 .cantidad(cantidad)
                 .monto(monto)
+                .gamerTag(gamerTag)
+                .equipo(esCompetidor ? limpiar(request.equipo()) : null)
                 .fechaCompra(LocalDateTime.now())
                 .referenciaPago(resultado.referenciaId())
                 .build();
@@ -135,6 +145,8 @@ public class InscripcionService {
                 tipoTicket.getTipo(),
                 guardada.getCantidad(),
                 guardada.getMonto(),
+                guardada.getGamerTag(),
+                guardada.getEquipo(),
                 guardada.getFechaCompra()
         );
     }
@@ -150,6 +162,8 @@ public class InscripcionService {
                         i.getTipoTicket().getTipo(),
                         i.getCantidad(),
                         i.getEstado(),
+                        i.getGamerTag(),
+                        i.getEquipo(),
                         i.getFechaCompra()
                 ))
                 .toList();
@@ -213,6 +227,10 @@ public class InscripcionService {
         }
         inscripcionRepository.guardarReferenciaReembolso(inscripcion.getId(), reembolso.referenciaId());
         return true;
+    }
+
+    private static String limpiar(final String texto) {
+        return texto == null || texto.isBlank() ? null : texto.trim();
     }
 
     private void reembolsar(final String referenciaId, final long monto) {
