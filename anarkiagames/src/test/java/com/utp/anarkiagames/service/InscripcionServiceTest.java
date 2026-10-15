@@ -43,6 +43,7 @@ class InscripcionServiceTest {
     @Mock private TorneoRepository torneoRepository;
     @Mock private PaymentGateway paymentGateway;
     @Mock private TicketService ticketService;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventos;
     @InjectMocks private InscripcionService service;
 
     private final User usuario = User.builder().id(10L).email("cliente@test.com").build();
@@ -78,6 +79,8 @@ class InscripcionServiceTest {
         assertEquals(3, response.cantidad());
         assertEquals(6000, response.monto());
         verify(ticketService).generar(argThat(i -> i.getCantidad() == 3));
+        verify(eventos).publishEvent(argThat((Object e) ->
+                e instanceof CompraConfirmadaEvent c && c.cantidad() == 3 && c.monto() == 6000));
         verify(paymentGateway).cobrar(eq("tok_ok"), eq(6000L), eq(usuario.getEmail()), any());
     }
 
@@ -137,6 +140,7 @@ class InscripcionServiceTest {
         assertThrows(PagoRechazadoException.class,
                 () -> service.comprar(TORNEO_ID, pedido(TipoParticipacion.ESPECTADOR, 1), usuario));
         verify(inscripcionRepository, never()).saveAndFlush(any(Inscripcion.class));
+        verifyNoInteractions(eventos);
     }
 
     @Test

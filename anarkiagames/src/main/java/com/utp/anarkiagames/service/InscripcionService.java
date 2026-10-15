@@ -21,6 +21,7 @@ import com.utp.anarkiagames.service.payment.PaymentGateway;
 import com.utp.anarkiagames.service.payment.PaymentResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +40,7 @@ public class InscripcionService {
     private final TorneoRepository torneoRepository;
     private final PaymentGateway paymentGateway;
     private final TicketService ticketService;
+    private final ApplicationEventPublisher eventos;
 
     /**
      * Compra tickets de un torneo. Reglas:
@@ -114,13 +116,18 @@ public class InscripcionService {
                 .build();
 
         final Inscripcion guardada;
+        final List<String> codigos;
         try {
             guardada = inscripcionRepository.saveAndFlush(inscripcion);
-            ticketService.generar(guardada);
+            codigos = ticketService.generar(guardada);
         } catch (RuntimeException e) {
             reembolsar(resultado.referenciaId(), monto);
             throw e;
         }
+
+        eventos.publishEvent(new CompraConfirmadaEvent(
+                usuario.getEmail(), usuario.getNombre(), torneo.getNombre(), torneo.getJuego(),
+                torneo.getFechaInicio(), tipoTicket.getTipo(), cantidad, monto, codigos));
 
         return new InscripcionResponse(
                 guardada.getId(),

@@ -34,6 +34,11 @@
       "name": "app.admin.nombre",
       "type": "java.lang.String",
       "description": "Nombre del administrador inicial"
+    },
+    {
+      "name": "app.frontend-url",
+      "type": "java.lang.String",
+      "description": "URL del frontend; se usa en los enlaces de los correos"
     }
   ]
 }
