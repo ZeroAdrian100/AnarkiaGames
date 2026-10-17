@@ -26,3 +26,17 @@ Este proyecto viene del curso "Curso Integrador I" (2025). El objetivo de esta n
 ## Documentación
 
 La documentación técnica completa (arquitectura, modelo de datos, reglas de negocio, API y configuración) está en [docs/DOCUMENTACION.md](docs/DOCUMENTACION.md).
+
+## Frontend
+
+El frontend está en [`frontend/`](frontend/README.md): React 19, TypeScript, Vite y Tailwind CSS, basado en el prototipo de Figma.
+
+Con el backend corriendo en `http://localhost:8080`:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+La aplicación queda en `http://localhost:5173`.
