@@ -16,7 +16,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-20 bg-negro">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
+      <div className="mx-auto flex h-14 max-w-8xl items-center gap-3 px-4">
         <button
           type="button"
           aria-label={menuAbierto ? 'Cerrar menú' : 'Abrir menú'}

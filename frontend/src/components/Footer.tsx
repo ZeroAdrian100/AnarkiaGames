@@ -22,7 +22,7 @@ const ANIO = new Date().getFullYear()
 export function Footer() {
   return (
     <footer className="bg-negro">
-      <div className="mx-auto max-w-6xl px-4 pb-8">
+      <div className="mx-auto max-w-8xl px-4 pb-8">
         <div className="border-t border-borde" />
         <div className="flex flex-col gap-6 pt-6 sm:flex-row sm:justify-between">
           <p className="font-display text-lg italic tracking-wide">Anarkia Games</p>

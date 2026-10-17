@@ -12,6 +12,9 @@
   --color-tinta: #151313;
   --color-menta: #8fe0b6;
 
+  /* Ancho máximo del contenido (1920 px): max-w-8xl. */
+  --container-8xl: 120rem;
+
   --font-display: Impact, "Arial Black", sans-serif;
   --font-body: system-ui, "Segoe UI", Roboto, sans-serif;
 }

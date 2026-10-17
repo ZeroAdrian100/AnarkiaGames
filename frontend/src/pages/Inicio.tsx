@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/cliente'
 
-// Página provisional de la F0: comprueba que el frontend llega al backend. La F1 la reemplaza por el inicio del diseño.
+
 export function Inicio() {
   const salud = useQuery({
     queryKey: ['salud'],
