@@ -10,10 +10,15 @@ public record TorneoResponse(
         String nombre,
         String juego,
         LocalDateTime fechaInicio,
-        EstadoTorneo estado
+        EstadoTorneo estado,
+        String descripcion,
+        String imagenUrl,
+        String lugar,
+        Integer duracionHoras
 ) {
     public static TorneoResponse of(final Torneo torneo) {
         return new TorneoResponse(
-                torneo.getId(), torneo.getNombre(), torneo.getJuego(), torneo.getFechaInicio(), torneo.getEstado());
+                torneo.getId(), torneo.getNombre(), torneo.getJuego(), torneo.getFechaInicio(), torneo.getEstado(),
+                torneo.getDescripcion(), torneo.getImagenUrl(), torneo.getLugar(), torneo.getDuracionHoras());
     }
 }

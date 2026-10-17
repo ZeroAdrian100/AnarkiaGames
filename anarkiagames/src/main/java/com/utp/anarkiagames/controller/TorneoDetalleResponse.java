@@ -11,6 +11,10 @@ public record TorneoDetalleResponse(
         String juego,
         LocalDateTime fechaInicio,
         EstadoTorneo estado,
+        String descripcion,
+        String imagenUrl,
+        String lugar,
+        Integer duracionHoras,
         List<TipoTicketResponse> tiposTicket
 ) {
 }
