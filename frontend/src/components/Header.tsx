@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router'
+import menu from '../assets/redes/menu.svg'
 import { useAuth } from '../auth/useAuth'
 
 const enlacesMenu = [
@@ -8,7 +9,7 @@ const enlacesMenu = [
   { to: '/merch', texto: 'Merch' },
 ]
 
-const pildora = 'rounded-full px-3 py-1 font-display text-sm italic tracking-wide'
+const pildora = 'rounded-full px-3 py-1 font-display text-sm italic tracking-wide lg:px-6 lg:py-1.5 lg:text-xl'
 
 export function Header() {
   const { usuario, cerrarSesion } = useAuth()
@@ -16,7 +17,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-20 bg-negro">
-      <div className="mx-auto flex h-14 max-w-8xl items-center gap-3 px-4">
+      <div className="mx-auto flex h-16 max-w-8xl items-center gap-3 px-4 lg:h-[115px] lg:gap-6 lg:px-10">
         <button
           type="button"
           aria-label={menuAbierto ? 'Cerrar menú' : 'Abrir menú'}
@@ -25,16 +26,14 @@ export function Header() {
           onClick={() => setMenuAbierto((abierto) => !abierto)}
           className="rounded p-1 hover:bg-superficie focus-visible:outline-2 focus-visible:outline-verde"
         >
-          <svg viewBox="0 0 24 24" className="size-7" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
-          </svg>
+          <img src={menu} alt="" width={40} height={34} className="h-6 w-auto lg:h-7" />
         </button>
 
-        <Link to="/" className="mr-auto font-display text-xl italic tracking-wide sm:text-2xl">
+        <Link to="/" className="mr-auto font-display text-2xl italic tracking-wide sm:text-3xl lg:ml-16 lg:text-5xl">
           Anarkia Games
         </Link>
 
-        <Link to="/torneos" className={`${pildora} hidden rounded-md bg-verde px-6 text-tinta hover:bg-verde-oscuro sm:block`}>
+        <Link to="/torneos" className={`${pildora} hidden rounded-[10px] bg-verde px-6 text-tinta hover:bg-verde-oscuro sm:block lg:px-12 lg:text-3xl`}>
           Tickets
         </Link>
 
