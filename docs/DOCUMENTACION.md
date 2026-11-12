@@ -752,6 +752,23 @@ Desde la carpeta `anarkiagames`, levantar la aplicación:
 ./mvnw spring-boot:run
 ```
 
+### Backend de demostración
+
+Para probar el frontend sin tocar SQL Server, desde `anarkiagames`:
+
+```bash
+./mvnw spring-boot:test-run
+```
+
+Arranca `AnarkiagamesDemoApplication` (en el código de tests, así que no va al `.jar` de producción):
+
+- Usa H2 en memoria. La conexión se fuerza con propiedades de sistema, que tienen prioridad sobre el `.env`, así que nunca se conecta a la BD real. Además, `DatosDemo` comprueba que la BD sea H2 antes de escribir.
+- Carga los 7 torneos del diseño de Figma, con imagen, descripción y tipos de ticket; el último, cancelado.
+- Admin: `admin@demo.com` / `demo12345`. Los correos se escriben en el log.
+- Al detenerlo, los datos se pierden.
+
+### Tests
+
 Ejecutar todos los tests. No necesitan SQL Server, porque usan H2 en memoria:
 
 ```bash
