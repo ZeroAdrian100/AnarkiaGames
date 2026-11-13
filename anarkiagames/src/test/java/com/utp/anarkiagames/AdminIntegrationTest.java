@@ -191,6 +191,32 @@ class AdminIntegrationTest {
                 .andExpect(status().isConflict());
     }
 
+    @Test
+    void elTorneoGuardaDescripcionImagenLugarYDuracion() throws Exception {
+        final String json = """
+                {"nombre":"Copa Detalle","juego":"Tekken 8","fechaInicio":"%s","descripcion":"Torneo de pelea",
+                 "imagenUrl":"https://cdn.ejemplo.com/tekken.jpg","lugar":"Jockey Plaza","duracionHoras":8}"""
+                .formatted(LocalDateTime.now().plusDays(10).withNano(0));
+        final long id = idDe(conAdmin(post("/admin/torneos").contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.lugar").value("Jockey Plaza")));
+
+        mvc.perform(get("/torneos/" + id))
+                .andExpect(jsonPath("$.descripcion").value("Torneo de pelea"))
+                .andExpect(jsonPath("$.imagenUrl").value("https://cdn.ejemplo.com/tekken.jpg"))
+                .andExpect(jsonPath("$.duracionHoras").value(8));
+        mvc.perform(get("/torneos"))
+                .andExpect(jsonPath("$[?(@.id == %d)].descripcion".formatted(id)).value(contains("Torneo de pelea")));
+
+        conAdmin(put("/admin/torneos/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(json.replace("\"duracionHoras\":8", "\"duracionHoras\":100")))
+                .andExpect(status().isBadRequest());
+        conAdmin(put("/admin/torneos/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(json.replace("Jockey Plaza", "Arena Lima")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lugar").value("Arena Lima"));
+    }
+
     // ---------- utilidades ----------
 
     private ResultActions conAdmin(final org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request)

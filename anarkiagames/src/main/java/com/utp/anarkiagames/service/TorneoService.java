@@ -32,6 +32,10 @@ public class TorneoService {
                 .nombre(request.nombre())
                 .juego(request.juego())
                 .fechaInicio(request.fechaInicio())
+                .descripcion(request.descripcion())
+                .imagenUrl(request.imagenUrl())
+                .lugar(request.lugar())
+                .duracionHoras(request.duracionHoras())
                 .build();
 
         return TorneoResponse.of(torneoRepository.save(torneo));
@@ -52,6 +56,7 @@ public class TorneoService {
 
         return new TorneoDetalleResponse(
                 torneo.getId(), torneo.getNombre(), torneo.getJuego(), torneo.getFechaInicio(), torneo.getEstado(),
+                torneo.getDescripcion(), torneo.getImagenUrl(), torneo.getLugar(), torneo.getDuracionHoras(),
                 tiposTicket);
     }
 
@@ -64,6 +69,10 @@ public class TorneoService {
         torneo.setNombre(request.nombre());
         torneo.setJuego(request.juego());
         torneo.setFechaInicio(request.fechaInicio());
+        torneo.setDescripcion(request.descripcion());
+        torneo.setImagenUrl(request.imagenUrl());
+        torneo.setLugar(request.lugar());
+        torneo.setDuracionHoras(request.duracionHoras());
         return TorneoResponse.of(torneo);
     }
 

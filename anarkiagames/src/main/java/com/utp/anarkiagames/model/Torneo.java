@@ -27,6 +27,17 @@ public class Torneo {
     @Column(name = "fecha_inicio", nullable = false)
     private LocalDateTime fechaInicio;
 
+    @Column(length = 1000)
+    private String descripcion;
+
+    @Column(name = "imagen_url", length = 500)
+    private String imagenUrl;
+
+    private String lugar;
+
+    @Column(name = "duracion_horas")
+    private Integer duracionHoras;
+
     /** Un torneo CANCELADO no vende tickets y sus compras se reembolsan. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

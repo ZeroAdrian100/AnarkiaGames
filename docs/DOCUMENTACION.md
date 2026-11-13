@@ -172,6 +172,10 @@ users 1 ──── * inscripciones * ──── 1 tipo_tickets * ───�
 | `nombre` | `String` | Obligatorio. |
 | `juego` | `String` | Obligatorio. |
 | `fechaInicio` | `LocalDateTime` | Obligatorio. La venta cierra en esta fecha. |
+| `descripcion` | `String` | Opcional, máximo 1000 caracteres. |
+| `imagenUrl` | `String` | Opcional, URL de la imagen del torneo (máximo 500 caracteres). |
+| `lugar` | `String` | Opcional. |
+| `duracionHoras` | `Integer` | Opcional, entre 1 y 72. |
 | `estado` | `EstadoTorneo` | `ACTIVO` (por defecto) o `CANCELADO`. |
 | `createdAt` | `LocalDateTime` | `@CreationTimestamp`. |
 
@@ -412,7 +416,13 @@ Respuesta: `{ "mensaje": "Contraseña actualizada" }`. Error: 400 si el token es
 #### `GET /torneos` → 200
 
 ```json
-[ { "id": 1, "nombre": "Copa Anarkia", "juego": "Tekken 8", "fechaInicio": "2026-11-20T18:00:00" } ]
+[
+  {
+    "id": 1, "nombre": "Copa Anarkia", "juego": "Tekken 8", "fechaInicio": "2026-11-20T18:00:00",
+    "estado": "ACTIVO", "descripcion": "Torneo de pelea 1 vs 1", "imagenUrl": "https://...",
+    "lugar": "Jockey Plaza", "duracionHoras": 8
+  }
+]
 ```
 
 #### `GET /torneos/{torneoId}` → 200
@@ -423,6 +433,8 @@ Respuesta: `{ "mensaje": "Contraseña actualizada" }`. Error: 400 si el token es
   "nombre": "Copa Anarkia",
   "juego": "Tekken 8",
   "fechaInicio": "2026-11-20T18:00:00",
+  "estado": "ACTIVO", "descripcion": "Torneo de pelea 1 vs 1", "imagenUrl": "https://...",
+  "lugar": "Jockey Plaza", "duracionHoras": 8,
   "tiposTicket": [
     {
       "id": 3, "torneoId": 1, "tipo": "ESPECTADOR",
@@ -513,10 +525,13 @@ Errores: 404 (código inexistente) y 409 (ticket ya usado, compra reembolsada o 
 #### `POST /admin/torneos` → 201
 
 ```json
-{ "nombre": "Copa Anarkia", "juego": "Tekken 8", "fechaInicio": "2026-11-20T18:00:00" }
+{
+  "nombre": "Copa Anarkia", "juego": "Tekken 8", "fechaInicio": "2026-11-20T18:00:00",
+  "descripcion": "Torneo de pelea 1 vs 1", "imagenUrl": "https://...", "lugar": "Jockey Plaza", "duracionHoras": 8
+}
 ```
 
-Validaciones: `nombre` y `juego` son obligatorios; `fechaInicio` es obligatoria y debe ser futura. La respuesta es un `TorneoResponse`.
+Validaciones: `nombre` y `juego` son obligatorios; `fechaInicio` es obligatoria y debe ser futura. `descripcion`, `imagenUrl`, `lugar` y `duracionHoras` son opcionales (`duracionHoras` entre 1 y 72). La respuesta es un `TorneoResponse`.
 
 #### `POST /admin/torneos/{torneoId}/tipos-ticket` → 201
 
@@ -737,6 +752,23 @@ Desde la carpeta `anarkiagames`, levantar la aplicación:
 ./mvnw spring-boot:run
 ```
 
+### Backend de demostración
+
+Para probar el frontend sin tocar SQL Server, desde `anarkiagames`:
+
+```bash
+./mvnw spring-boot:test-run
+```
+
+Arranca `AnarkiagamesDemoApplication` (en el código de tests, así que no va al `.jar` de producción):
+
+- Usa H2 en memoria. La conexión se fuerza con propiedades de sistema, que tienen prioridad sobre el `.env`, así que nunca se conecta a la BD real. Además, `DatosDemo` comprueba que la BD sea H2 antes de escribir.
+- Carga los 7 torneos del diseño de Figma, con imagen, descripción y tipos de ticket; el último, cancelado.
+- Admin: `admin@demo.com` / `demo12345`. Los correos se escriben en el log.
+- Al detenerlo, los datos se pierden.
+
+### Tests
+
 Ejecutar todos los tests. No necesitan SQL Server, porque usan H2 en memoria:
 
 ```bash
@@ -771,6 +803,7 @@ El esquema lo maneja **Flyway**. Los scripts están en `anarkiagames/src/main/re
 | 4 | `V4__tickets.sql` | Crea `tickets` y genera un ticket por unidad para cada compra `PAGADA` anterior, con un código aleatorio de `NEWID()`. |
 | 5 | `V5__tokens_recuperacion.sql` | Crea `tokens_recuperacion` para los enlaces de recuperación de contraseña. |
 | 6 | `V6__datos_del_competidor.sql` | Agrega `inscripciones.gamer_tag` e `inscripciones.equipo`. Las compras anteriores quedan sin estos datos. |
+| 7 | `V7__detalles_del_torneo.sql` | Agrega `descripcion`, `imagen_url`, `lugar` y `duracion_horas` a `torneos`, todos opcionales. |
 
 Comportamiento según la BD:
 
