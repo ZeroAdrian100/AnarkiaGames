@@ -1,8 +1,8 @@
 package com.utp.anarkiagames.service;
 
-import com.utp.anarkiagames.controller.ActualizarTipoTicketRequest;
-import com.utp.anarkiagames.controller.TipoTicketRequest;
-import com.utp.anarkiagames.controller.TipoTicketResponse;
+import com.utp.anarkiagames.dto.request.ActualizarTipoTicketRequest;
+import com.utp.anarkiagames.dto.request.TipoTicketRequest;
+import com.utp.anarkiagames.dto.response.TipoTicketResponse;
 import com.utp.anarkiagames.exception.ConflictoException;
 import com.utp.anarkiagames.exception.RecursoNoEncontradoException;
 import com.utp.anarkiagames.model.TipoTicket;

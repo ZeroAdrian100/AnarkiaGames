@@ -1,5 +1,11 @@
 package com.utp.anarkiagames.controller;
 
+import com.utp.anarkiagames.dto.request.LoginRequest;
+import com.utp.anarkiagames.dto.request.RecuperarPasswordRequest;
+import com.utp.anarkiagames.dto.request.RegisterRequest;
+import com.utp.anarkiagames.dto.request.RestablecerPasswordRequest;
+import com.utp.anarkiagames.dto.response.MensajeResponse;
+import com.utp.anarkiagames.dto.response.TokenResponse;
 import com.utp.anarkiagames.service.AuthService;
 import com.utp.anarkiagames.service.RecuperacionPasswordService;
 import lombok.RequiredArgsConstructor;

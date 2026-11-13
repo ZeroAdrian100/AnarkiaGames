@@ -1,4 +1,4 @@
-package com.utp.anarkiagames.controller;
+package com.utp.anarkiagames.dto.response;
 
 /**
  * Resultado de cancelar un torneo. Las compras pendientes no se pudieron reembolsar

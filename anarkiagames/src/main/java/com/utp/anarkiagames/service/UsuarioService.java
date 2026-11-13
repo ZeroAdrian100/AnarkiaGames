@@ -1,7 +1,7 @@
 package com.utp.anarkiagames.service;
 
-import com.utp.anarkiagames.controller.PaginaResponse;
-import com.utp.anarkiagames.controller.UsuarioResponse;
+import com.utp.anarkiagames.dto.response.PaginaResponse;
+import com.utp.anarkiagames.dto.response.UsuarioResponse;
 import com.utp.anarkiagames.exception.ConflictoException;
 import com.utp.anarkiagames.exception.RecursoNoEncontradoException;
 import com.utp.anarkiagames.model.Role;

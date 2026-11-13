@@ -1,5 +1,11 @@
 package com.utp.anarkiagames.controller;
 
+import com.utp.anarkiagames.dto.request.TorneoRequest;
+import com.utp.anarkiagames.dto.response.CancelacionResponse;
+import com.utp.anarkiagames.dto.response.InscripcionAdminResponse;
+import com.utp.anarkiagames.dto.response.PaginaResponse;
+import com.utp.anarkiagames.dto.response.ResumenTorneoResponse;
+import com.utp.anarkiagames.dto.response.TorneoResponse;
 import com.utp.anarkiagames.service.InscripcionService;
 import com.utp.anarkiagames.service.TorneoService;
 import jakarta.validation.Valid;

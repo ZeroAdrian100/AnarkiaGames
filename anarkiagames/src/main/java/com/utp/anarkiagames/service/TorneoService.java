@@ -1,11 +1,11 @@
 package com.utp.anarkiagames.service;
 
-import com.utp.anarkiagames.controller.CancelacionResponse;
-import com.utp.anarkiagames.controller.ResumenTorneoResponse;
-import com.utp.anarkiagames.controller.TipoTicketResponse;
-import com.utp.anarkiagames.controller.TorneoDetalleResponse;
-import com.utp.anarkiagames.controller.TorneoRequest;
-import com.utp.anarkiagames.controller.TorneoResponse;
+import com.utp.anarkiagames.dto.response.CancelacionResponse;
+import com.utp.anarkiagames.dto.response.ResumenTorneoResponse;
+import com.utp.anarkiagames.dto.response.TipoTicketResponse;
+import com.utp.anarkiagames.dto.response.TorneoDetalleResponse;
+import com.utp.anarkiagames.dto.request.TorneoRequest;
+import com.utp.anarkiagames.dto.response.TorneoResponse;
 import com.utp.anarkiagames.exception.ConflictoException;
 import com.utp.anarkiagames.exception.RecursoNoEncontradoException;
 import com.utp.anarkiagames.model.EstadoTorneo;
@@ -25,7 +25,7 @@ public class TorneoService {
     private final TorneoRepository torneoRepository;
     private final TipoTicketRepository tipoTicketRepository;
     private final InscripcionRepository inscripcionRepository;
-    private final InscripcionService inscripcionService;
+    private final ReembolsoService reembolsoService;
 
     public TorneoResponse crear(final TorneoRequest request){
         final Torneo torneo = Torneo.builder()
@@ -83,7 +83,7 @@ public class TorneoService {
     public CancelacionResponse cancelar(final Long torneoId){
         final Torneo torneo = buscar(torneoId);
         torneoRepository.marcarCancelado(torneoId);
-        return inscripcionService.reembolsarTodas(torneo);
+        return reembolsoService.reembolsarTodas(torneo);
     }
 
     public ResumenTorneoResponse resumen(final Long torneoId){
