@@ -1,4 +1,4 @@
-package com.utp.anarkiagames.controller;
+package com.utp.anarkiagames.dto.request;
 
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Max;

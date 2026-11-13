@@ -1,7 +1,7 @@
 package com.utp.anarkiagames.service;
 
-import com.utp.anarkiagames.controller.InscripcionRequest;
-import com.utp.anarkiagames.controller.InscripcionResponse;
+import com.utp.anarkiagames.dto.request.InscripcionRequest;
+import com.utp.anarkiagames.dto.response.InscripcionResponse;
 import com.utp.anarkiagames.exception.ConflictoException;
 import com.utp.anarkiagames.exception.ErrorPasarelaException;
 import com.utp.anarkiagames.exception.PagoRechazadoException;

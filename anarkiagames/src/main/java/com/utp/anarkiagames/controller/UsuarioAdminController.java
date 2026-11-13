@@ -1,5 +1,8 @@
 package com.utp.anarkiagames.controller;
 
+import com.utp.anarkiagames.dto.request.CambiarRolRequest;
+import com.utp.anarkiagames.dto.response.PaginaResponse;
+import com.utp.anarkiagames.dto.response.UsuarioResponse;
 import com.utp.anarkiagames.model.User;
 import com.utp.anarkiagames.service.UsuarioService;
 import jakarta.validation.Valid;

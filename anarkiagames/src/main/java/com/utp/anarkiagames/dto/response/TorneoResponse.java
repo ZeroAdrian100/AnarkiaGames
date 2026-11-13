@@ -1,4 +1,4 @@
-package com.utp.anarkiagames.controller;
+package com.utp.anarkiagames.dto.response;
 
 import com.utp.anarkiagames.model.EstadoTorneo;
 import com.utp.anarkiagames.model.Torneo;

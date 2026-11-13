@@ -1,5 +1,9 @@
 package com.utp.anarkiagames.controller;
 
+import com.utp.anarkiagames.dto.request.InscripcionRequest;
+import com.utp.anarkiagames.dto.response.InscripcionResponse;
+import com.utp.anarkiagames.dto.response.MiInscripcionResponse;
+import com.utp.anarkiagames.dto.response.TicketResponse;
 import com.utp.anarkiagames.model.User;
 import com.utp.anarkiagames.service.InscripcionService;
 import com.utp.anarkiagames.service.TicketService;

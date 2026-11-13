@@ -1,11 +1,11 @@
 package com.utp.anarkiagames.service;
 
-import com.utp.anarkiagames.controller.CancelacionResponse;
-import com.utp.anarkiagames.controller.InscripcionAdminResponse;
-import com.utp.anarkiagames.controller.InscripcionRequest;
-import com.utp.anarkiagames.controller.InscripcionResponse;
-import com.utp.anarkiagames.controller.MiInscripcionResponse;
-import com.utp.anarkiagames.controller.PaginaResponse;
+import com.utp.anarkiagames.dto.response.CancelacionResponse;
+import com.utp.anarkiagames.dto.response.InscripcionAdminResponse;
+import com.utp.anarkiagames.dto.request.InscripcionRequest;
+import com.utp.anarkiagames.dto.response.InscripcionResponse;
+import com.utp.anarkiagames.dto.response.MiInscripcionResponse;
+import com.utp.anarkiagames.dto.response.PaginaResponse;
 import com.utp.anarkiagames.exception.*;
 import com.utp.anarkiagames.model.EstadoInscripcion;
 import com.utp.anarkiagames.model.EstadoTorneo;

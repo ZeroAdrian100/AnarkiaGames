@@ -1,4 +1,4 @@
-package com.utp.anarkiagames.controller;
+package com.utp.anarkiagames.dto.request;
 
 import com.utp.anarkiagames.model.Role;
 import jakarta.validation.constraints.NotNull;

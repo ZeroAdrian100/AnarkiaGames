@@ -1,8 +1,8 @@
 package com.utp.anarkiagames.service;
 
-import com.utp.anarkiagames.controller.LoginRequest;
-import com.utp.anarkiagames.controller.RegisterRequest;
-import com.utp.anarkiagames.controller.TokenResponse;
+import com.utp.anarkiagames.dto.request.LoginRequest;
+import com.utp.anarkiagames.dto.request.RegisterRequest;
+import com.utp.anarkiagames.dto.response.TokenResponse;
 import com.utp.anarkiagames.exception.ConflictoException;
 import com.utp.anarkiagames.exception.DemasiadosIntentosException;
 import com.utp.anarkiagames.model.Role;

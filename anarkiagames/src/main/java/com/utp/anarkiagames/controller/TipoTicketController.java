@@ -1,5 +1,8 @@
 package com.utp.anarkiagames.controller;
 
+import com.utp.anarkiagames.dto.request.ActualizarTipoTicketRequest;
+import com.utp.anarkiagames.dto.request.TipoTicketRequest;
+import com.utp.anarkiagames.dto.response.TipoTicketResponse;
 import com.utp.anarkiagames.service.TipoTicketService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

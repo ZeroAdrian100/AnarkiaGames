@@ -1,7 +1,7 @@
 package com.utp.anarkiagames.service;
 
-import com.utp.anarkiagames.controller.CheckinResponse;
-import com.utp.anarkiagames.controller.TicketResponse;
+import com.utp.anarkiagames.dto.response.CheckinResponse;
+import com.utp.anarkiagames.dto.response.TicketResponse;
 import com.utp.anarkiagames.exception.ConflictoException;
 import com.utp.anarkiagames.exception.RecursoNoEncontradoException;
 import com.utp.anarkiagames.model.EstadoInscripcion;

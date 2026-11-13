@@ -1,5 +1,6 @@
 package com.utp.anarkiagames.controller;
 
+import com.utp.anarkiagames.dto.response.InscripcionAdminResponse;
 import com.utp.anarkiagames.service.InscripcionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

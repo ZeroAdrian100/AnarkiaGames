@@ -1,5 +1,6 @@
 package com.utp.anarkiagames.controller;
 
+import com.utp.anarkiagames.dto.response.CheckinResponse;
 import com.utp.anarkiagames.service.TicketService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
