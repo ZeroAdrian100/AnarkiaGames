@@ -3,7 +3,6 @@ package com.utp.anarkiagames.service;
 import com.utp.anarkiagames.dto.request.InscripcionRequest;
 import com.utp.anarkiagames.dto.response.InscripcionResponse;
 import com.utp.anarkiagames.exception.ConflictoException;
-import com.utp.anarkiagames.exception.ErrorPasarelaException;
 import com.utp.anarkiagames.exception.PagoRechazadoException;
 import com.utp.anarkiagames.exception.SolicitudInvalidaException;
 import com.utp.anarkiagames.model.EstadoInscripcion;
@@ -160,30 +159,6 @@ class InscripcionServiceTest {
         assertThrows(ConflictoException.class,
                 () -> service.comprar(TORNEO_ID, pedido(TipoParticipacion.ESPECTADOR, 1), usuario));
         verifyNoInteractions(paymentGateway);
-    }
-
-    @Test
-    void reembolsoFallidoDevuelveLaCompraAPagada() {
-        final Inscripcion inscripcion = Inscripcion.builder().id(7L).referenciaPago("chr_7").monto(4000).build();
-        when(inscripcionRepository.findById(7L)).thenReturn(Optional.of(inscripcion));
-        when(inscripcionRepository.cambiarEstado(7L, EstadoInscripcion.PAGADA, EstadoInscripcion.REEMBOLSADA))
-                .thenReturn(1);
-        when(paymentGateway.reembolsar("chr_7", 4000L)).thenReturn(new PaymentResult(false, null, "caida"));
-
-        assertThrows(ErrorPasarelaException.class, () -> service.reembolsar(7L));
-        verify(inscripcionRepository).cambiarEstado(7L, EstadoInscripcion.REEMBOLSADA, EstadoInscripcion.PAGADA);
-        verify(inscripcionRepository, never()).guardarReferenciaReembolso(anyLong(), any());
-    }
-
-    @Test
-    void noSeReembolsaDosVeces() {
-        final Inscripcion inscripcion = Inscripcion.builder().id(8L).referenciaPago("chr_8").monto(2000).build();
-        when(inscripcionRepository.findById(8L)).thenReturn(Optional.of(inscripcion));
-        when(inscripcionRepository.cambiarEstado(8L, EstadoInscripcion.PAGADA, EstadoInscripcion.REEMBOLSADA))
-                .thenReturn(0);
-
-        assertThrows(ConflictoException.class, () -> service.reembolsar(8L));
-        verify(paymentGateway, never()).reembolsar(any(), anyLong());
     }
 
     @Test

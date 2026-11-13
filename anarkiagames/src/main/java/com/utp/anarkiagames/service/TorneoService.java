@@ -25,7 +25,7 @@ public class TorneoService {
     private final TorneoRepository torneoRepository;
     private final TipoTicketRepository tipoTicketRepository;
     private final InscripcionRepository inscripcionRepository;
-    private final InscripcionService inscripcionService;
+    private final ReembolsoService reembolsoService;
 
     public TorneoResponse crear(final TorneoRequest request){
         final Torneo torneo = Torneo.builder()
@@ -83,7 +83,7 @@ public class TorneoService {
     public CancelacionResponse cancelar(final Long torneoId){
         final Torneo torneo = buscar(torneoId);
         torneoRepository.marcarCancelado(torneoId);
-        return inscripcionService.reembolsarTodas(torneo);
+        return reembolsoService.reembolsarTodas(torneo);
     }
 
     public ResumenTorneoResponse resumen(final Long torneoId){
