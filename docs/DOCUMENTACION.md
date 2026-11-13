@@ -30,7 +30,7 @@ Cliente (frontend Vite en localhost:5173)
 JwtAuthFilter ──► SecurityConfig (reglas por ruta y rol)
         │
         ▼
-Controladores (controller)   ← DTOs de entrada/salida (records) + Bean Validation
+Controladores (controller)   ← DTOs de entrada/salida (dto, records) + Bean Validation
         │
         ▼
 Servicios (service)          ← reglas de negocio y transacciones
@@ -74,7 +74,7 @@ Paquete raíz: `com.utp.anarkiagames` (en `anarkiagames/src/main/java`).
 
 ### `controller`
 
-Controladores REST y DTOs. Los DTOs son `record` de Java.
+Controladores REST. Reciben y devuelven los DTOs del paquete `dto`.
 
 | Clase | Ruta base | Descripción |
 |---|---|---|
@@ -87,9 +87,16 @@ Controladores REST y DTOs. Los DTOs son `record` de Java.
 | `UsuarioAdminController` | `/admin/usuarios` | Listar y buscar usuarios; cambiar su rol (solo ADMIN). |
 | `CheckinAdminController` | `/admin/checkin` | Check-in de un ticket en la puerta del evento (solo ADMIN). |
 
-DTOs de entrada (validados con `@Valid`): `RegisterRequest`, `LoginRequest`, `TorneoRequest`, `TipoTicketRequest`, `ActualizarTipoTicketRequest`, `InscripcionRequest`, `CambiarRolRequest`, `RecuperarPasswordRequest`, `RestablecerPasswordRequest`.
+### `dto`
 
-DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `TipoTicketResponse`, `InscripcionResponse`, `MiInscripcionResponse`, `InscripcionAdminResponse`, `ResumenTorneoResponse`, `CancelacionResponse`, `UsuarioResponse`, `TicketResponse`, `CheckinResponse`, `MensajeResponse` y `PaginaResponse<T>` (listados paginados).
+Objetos que viajan por la API, como `record` de Java. Están separados de los controladores para que los servicios no dependan de la capa web.
+
+| Paquete | Contenido |
+|---|---|
+| `dto.request` | Cuerpos de entrada, validados con `@Valid`: `RegisterRequest`, `LoginRequest`, `TorneoRequest`, `TipoTicketRequest`, `ActualizarTipoTicketRequest`, `InscripcionRequest`, `CambiarRolRequest`, `RecuperarPasswordRequest`, `RestablecerPasswordRequest`. |
+| `dto.response` | Respuestas: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `TipoTicketResponse`, `InscripcionResponse`, `MiInscripcionResponse`, `InscripcionAdminResponse`, `ResumenTorneoResponse`, `CancelacionResponse`, `UsuarioResponse`, `TicketResponse`, `CheckinResponse`, `MensajeResponse` y `PaginaResponse<T>` (listados paginados). |
+
+`ErrorResponse` queda en `exception`, junto al manejador que lo produce.
 
 ### `service`
 
@@ -100,9 +107,10 @@ DTOs de salida: `TokenResponse`, `TorneoResponse`, `TorneoDetalleResponse`, `Tip
 | `RecuperacionPasswordService` | Genera los enlaces de recuperación y cambia la contraseña con un token válido. |
 | `AuthService` | Registra clientes (siempre con rol `CLIENTE`), autentica y renueva el access token a partir de un refresh token. |
 | `JwtService` | Genera y valida JWT. Distingue access y refresh token con el claim `type`. |
-| `TorneoService` | Crea, lista, detalla, edita y cancela torneos, y arma el resumen de stock e ingresos. |
+| `TorneoService` | Crea, lista, detalla, edita y cancela torneos (la cancelación delega los reembolsos en `ReembolsoService`), y arma el resumen de stock e ingresos. |
 | `TipoTicketService` | Crea, edita y elimina el tipo de ticket de un torneo; solo uno por tipo de participación. |
-| `InscripcionService` | Compra de tickets con todas las reglas de negocio (sección 4), "mis inscripciones", inscritos de un torneo y reembolsos. |
+| `InscripcionService` | Compra de tickets con todas las reglas de negocio (sección 4), "mis inscripciones" e inscritos de un torneo. Si el cobro pasa y el guardado falla, compensa el cargo. |
+| `ReembolsoService` | Reembolsa una compra o todas las de un torneo cancelado, sin reembolsar dos veces la misma (sección 4). |
 | `UsuarioService` | Lista y busca usuarios; cambia su rol. |
 | `TicketService` | Genera los tickets de cada compra, lista los del usuario y hace el check-in. |
 | `IntentosLoginService` | Cuenta los logins fallidos por email e IP y bloquea tras 5 fallos en 15 minutos (sección 5). |
@@ -777,7 +785,8 @@ Ejecutar todos los tests. No necesitan SQL Server, porque usan H2 en memoria:
 
 | Clase | Tipo | Qué cubre |
 |---|---|---|
-| `InscripcionServiceTest` | Unitario (Mockito) | Reglas de la sección 4: cantidades, límite por compra, tipo único por torneo, cierre de venta, torneo cancelado, stock, pago rechazado, reembolsos (fallo de la pasarela y doble reembolso) y datos del competidor (gamer tag obligatorio y único, espectador los ignora). |
+| `InscripcionServiceTest` | Unitario (Mockito) | Reglas de la sección 4: cantidades, límite por compra, tipo único por torneo, cierre de venta, torneo cancelado, stock, pago rechazado, compensación del cargo si falla el guardado y datos del competidor (gamer tag obligatorio y único, espectador los ignora). |
+| `ReembolsoServiceTest` | Unitario (Mockito) | Un fallo de la pasarela devuelve la compra a `PAGADA`, no se reembolsa dos veces y la cancelación cuenta reembolsadas y pendientes. |
 | `CompraIntegrationTest` | Integración (H2 + MockMvc) | Flujo HTTP completo: administrador inicial, creación de torneos y tickets, compras, cupos disponibles, 401/403, refresh token, validaciones, email duplicado y gamer tag obligatorio y único por torneo. También valida las consultas JPQL. |
 | `AdminIntegrationTest` | Integración (H2 + MockMvc) | Panel admin: resumen de stock e ingresos, cancelación con reembolsos, reembolso individual, edición y eliminación de tipos de ticket, edición de torneos, búsqueda de usuarios, cambio de rol y paginación. |
 | `IntentosLoginServiceTest` | Unitario | Bloqueo tras 5 fallos, vencimiento de la ventana, clave por email e IP y reinicio tras un login exitoso. |
