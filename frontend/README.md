@@ -26,6 +26,18 @@ Abre `http://localhost:5173`. Este puerto es el que el backend permite por CORS.
 | `npm run lint` | Revisa el código con oxlint. |
 | `npm run preview` | Sirve la versión de `dist/` para probarla. |
 
+## Flujo de compra
+
+El botón **Tickets** abre una compra en tres pasos, como en el Figma:
+
+| Paso | Ruta | Página |
+|---|---|---|
+| 1 | `/tickets` | `Evento`: descripción general, fechas, lugar y precios "desde". |
+| 2 | `/tickets/modalidad` | `Modalidad`: espectador o jugador. |
+| 3 | `/tickets/espectador` o `/tickets/jugador` | `TicketsPorModalidad`: torneos con tickets de esa modalidad. |
+
+Los datos del paso 1 se calculan con los torneos que tienen la venta abierta (`tickets/evento.ts`).
+
 ## Probar con datos de ejemplo
 
 Desde `anarkiagames`, levanta el backend de demostración (H2 en memoria, no toca SQL Server):
@@ -48,7 +60,8 @@ src/
   auth/         sesión (tokens en localStorage) y contexto de usuario
   assets/       imágenes y logos del diseño de Figma (WebP)
   components/   piezas compartidas: Layout, Header, Footer, ImagenTorneo, estilos de botones
-  pages/        una página por ruta: Inicio, Torneos, TorneoDetalle, Modalidad, Merch
+  pages/        una página por ruta: Inicio, Evento, Modalidad, TicketsPorModalidad, Merch
+  tickets/      modalidades (espectador y jugador) y cálculo de los datos del evento
   utils/        formato de soles, fechas y horas
   router.tsx    rutas de la aplicación
   index.css     Tailwind y los colores y fuentes del diseño de Figma

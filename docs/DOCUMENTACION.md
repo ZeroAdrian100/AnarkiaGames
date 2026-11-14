@@ -428,10 +428,16 @@ Respuesta: `{ "mensaje": "Contraseña actualizada" }`. Error: 400 si el token es
   {
     "id": 1, "nombre": "Copa Anarkia", "juego": "Tekken 8", "fechaInicio": "2026-11-20T18:00:00",
     "estado": "ACTIVO", "descripcion": "Torneo de pelea 1 vs 1", "imagenUrl": "https://...",
-    "lugar": "Jockey Plaza", "duracionHoras": 8
+    "lugar": "Jockey Plaza", "duracionHoras": 8,
+    "tiposTicket": [
+      { "id": 3, "torneoId": 1, "tipo": "ESPECTADOR", "stockMaximo": 100, "disponibles": 87, "precio": 2500,
+        "descripcion": null, "imagenUrl": null }
+    ]
   }
 ]
 ```
+
+Cada torneo incluye sus tipos de ticket con precio y cupos disponibles, igual que el detalle. El frontend arma con esta sola respuesta los tres pasos de la compra.
 
 #### `GET /torneos/{torneoId}` → 200
 
