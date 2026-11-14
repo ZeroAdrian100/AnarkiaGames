@@ -5,7 +5,7 @@ import { useAuth } from '../auth/useAuth'
 
 const enlacesMenu = [
   { to: '/', texto: 'Inicio' },
-  { to: '/torneos', texto: 'Torneos' },
+  { to: '/tickets', texto: 'Tickets' },
   { to: '/merch', texto: 'Merch' },
 ]
 
@@ -33,7 +33,7 @@ export function Header() {
           Anarkia Games
         </Link>
 
-        <Link to="/torneos" className={`${pildora} hidden rounded-[10px] bg-verde px-6 text-tinta hover:bg-verde-oscuro sm:block lg:px-12 lg:text-3xl`}>
+        <Link to="/tickets" className={`${pildora} hidden rounded-[10px] bg-verde px-6 text-tinta hover:bg-verde-oscuro sm:block lg:px-12 lg:text-3xl`}>
           Tickets
         </Link>
 
@@ -65,7 +65,7 @@ export function Header() {
               <li key={enlace.to}>
                 <NavLink
                   to={enlace.to}
-                  end
+                  end={enlace.to === '/'}
                   onClick={() => setMenuAbierto(false)}
                   className={({ isActive }) =>
                     `block rounded px-2 py-2 font-display italic tracking-wide hover:bg-superficie ${isActive ? 'text-verde' : ''}`

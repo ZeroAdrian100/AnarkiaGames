@@ -1,5 +1,4 @@
 import { Link } from 'react-router'
-import { ApiError } from '../api/cliente'
 import { botonVerde } from './estilos'
 
 export function Cargando({ texto = 'Cargando…' }: { texto?: string }) {
@@ -11,13 +10,12 @@ export function Cargando({ texto = 'Cargando…' }: { texto?: string }) {
 }
 
 export function ErrorCarga({ error }: { error: Error }) {
-  const noExiste = error instanceof ApiError && error.status === 404
   return (
     <div role="alert" className="flex flex-col items-center gap-4 py-24 text-center">
-      <p className="font-display text-3xl italic tracking-wide">{noExiste ? 'No encontramos este torneo' : 'No se pudo cargar'}</p>
-      <p className="text-white/70">{noExiste ? 'Puede que el enlace esté mal o que el torneo ya no exista.' : error.message}</p>
-      <Link to="/torneos" className={botonVerde}>
-        Ver torneos
+      <p className="font-display text-3xl italic tracking-wide">No se pudo cargar</p>
+      <p className="text-white/70">{error.message}</p>
+      <Link to="/" className={botonVerde}>
+        Volver al inicio
       </Link>
     </div>
   )

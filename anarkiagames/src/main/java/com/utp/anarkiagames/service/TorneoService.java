@@ -41,15 +41,17 @@ public class TorneoService {
         return TorneoResponse.of(torneoRepository.save(torneo));
     }
 
-    public List<TorneoResponse> listar(){
+    public List<TorneoDetalleResponse> listar(){
         return torneoRepository.findAll().stream()
-                .map(TorneoResponse::of)
+                .map(this::detalle)
                 .toList();
     }
 
     public TorneoDetalleResponse obtener(final Long torneoId){
-        final Torneo torneo = buscar(torneoId);
+        return detalle(buscar(torneoId));
+    }
 
+    private TorneoDetalleResponse detalle(final Torneo torneo){
         final List<TipoTicketResponse> tiposTicket = tipoTicketRepository.findByTorneo(torneo).stream()
                 .map(tt -> TipoTicketResponse.of(tt, inscripcionRepository.sumCantidadByTipoTicket(tt)))
                 .toList();

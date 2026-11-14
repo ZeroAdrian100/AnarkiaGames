@@ -1,7 +1,6 @@
 package com.utp.anarkiagames.controller;
 
 import com.utp.anarkiagames.dto.response.TorneoDetalleResponse;
-import com.utp.anarkiagames.dto.response.TorneoResponse;
 import com.utp.anarkiagames.service.TorneoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +15,7 @@ public class TorneoController {
     private final TorneoService service;
 
     @GetMapping
-    public ResponseEntity<List<TorneoResponse>> listar(){
+    public ResponseEntity<List<TorneoDetalleResponse>> listar(){
         return ResponseEntity.ok(service.listar());
     }
 

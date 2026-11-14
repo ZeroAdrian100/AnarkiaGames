@@ -1,18 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from './cliente'
-import type { Torneo, TorneoDetalle } from './tipos'
+import type { TorneoDetalle } from './tipos'
 
+/** Todos los torneos, cada uno con sus tipos de ticket, precios y cupos. */
 export function useTorneos() {
   return useQuery({
     queryKey: ['torneos'],
-    queryFn: () => api<Torneo[]>('/torneos'),
-  })
-}
-
-export function useTorneo(id: number) {
-  return useQuery({
-    queryKey: ['torneos', id],
-    queryFn: () => api<TorneoDetalle>(`/torneos/${id}`),
-    enabled: Number.isInteger(id) && id > 0,
+    queryFn: () => api<TorneoDetalle[]>('/torneos'),
   })
 }
