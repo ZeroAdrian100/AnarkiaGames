@@ -1,63 +1,95 @@
 import type { ReactNode } from 'react'
-import { Link, useParams } from 'react-router'
-import { useTorneo } from '../api/torneos'
-import type { TipoTicket, TorneoDetalle as Detalle } from '../api/tipos'
+import { Link } from 'react-router'
+import estadio from '../assets/inicio/estadio.webp'
+import { useTorneos } from '../api/torneos'
+import type { TorneoDetalle } from '../api/tipos'
 import { Cargando, ErrorCarga } from '../components/EstadoCarga'
-import { ImagenTorneo } from '../components/ImagenTorneo'
 import { botonDeshabilitado, botonVerde, contenedor } from '../components/estilos'
-import { formatearFecha, formatearHora, formatearSoles, ventaAbierta } from '../utils/formato'
+import { precioDesde, resumenEvento, type ResumenEvento } from '../tickets/evento'
+import { MODALIDADES } from '../tickets/modalidades'
 
-const DESCRIPCION_GENERAL =
-  'Únete al evento gamer más esperado: participa en las competiciones para demostrar tus habilidades y ganar increíbles premios, o adquiere tu entrada para vivir la emoción como espectador y disfrutar del mejor show de videojuegos en vivo.'
+/** Paso 1 de la compra: descripción general del evento (frame "Tickets" del Figma). */
+export function Evento() {
+  const torneos = useTorneos()
 
-const NOMBRE_TIPO: Record<TipoTicket['tipo'], string> = {
-  COMPETIDOR: 'Competidor',
-  ESPECTADOR: 'Público General',
-}
+  if (torneos.isError) return <ErrorCarga error={torneos.error} />
+  if (!torneos.isSuccess) return <Cargando texto="Cargando evento…" />
 
-export function TorneoDetalle() {
-  const { id } = useParams()
-  const torneo = useTorneo(Number(id))
-
-  if (torneo.isError) return <ErrorCarga error={torneo.error} />
-  if (!torneo.isSuccess) return <Cargando texto="Cargando torneo…" />
-
-  const t = torneo.data
+  const resumen = resumenEvento(torneos.data)
   return (
     // En móvil las entradas van justo debajo de la imagen; en escritorio, en una columna a la derecha.
     <div className={`${contenedor} grid gap-10 py-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,522px)] lg:gap-x-16 lg:py-20`}>
-      <div className="flex flex-col gap-10 lg:col-start-1">
-        <h1 className="font-display text-3xl italic tracking-wide lg:text-5xl">{t.nombre}</h1>
-        <ImagenTorneo torneo={t} className="aspect-[730/386] w-full max-w-[730px]" />
+      <div className="lg:col-start-1">
+        <h1 className="sr-only">Tickets para Anarkia Games</h1>
+        <img src={estadio} alt="Estadio lleno durante la final de un torneo" className="aspect-[730/386] w-full max-w-[730px] object-cover" />
       </div>
 
       <aside className="flex flex-col items-center gap-8 lg:sticky lg:top-[135px] lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
-        <Entradas torneo={t} />
-        <EleccionTicket torneo={t} />
+        <Entradas torneos={torneos.data} resumen={resumen} />
+        <div className="flex flex-col items-center gap-4 text-center">
+          <p className="text-xl lg:text-[27px]">
+            {resumen.hayVenta ? 'Elige tu ticket aquí' : 'Por ahora no hay torneos con venta abierta.'}
+          </p>
+          {resumen.hayVenta ? (
+            <Link to="/tickets/modalidad" className={`${botonVerde} w-72 lg:text-[32px]`}>
+              Elegir ticket
+            </Link>
+          ) : (
+            <span className={`${botonDeshabilitado} w-72 lg:text-[32px]`}>Elegir ticket</span>
+          )}
+        </div>
       </aside>
 
       <div className="flex flex-col gap-10 lg:col-start-1">
         <section>
           <h2 className="text-2xl font-bold lg:text-3xl">Descripción</h2>
-          <p className="mt-4 text-lg leading-relaxed lg:pl-7 lg:text-2xl">{t.descripcion ?? DESCRIPCION_GENERAL}</p>
+          <p className="mt-4 text-lg leading-relaxed lg:pl-7 lg:text-2xl">
+            Únete al evento gamer más esperado: participa en las competiciones para demostrar tus habilidades y ganar
+            increíbles premios, o adquiere tu entrada para vivir la emoción como espectador y disfrutar del mejor show de
+            videojuegos en vivo.
+          </p>
         </section>
-        <InformacionAdicional torneo={t} />
+        <InformacionAdicional resumen={resumen} />
       </div>
     </div>
   )
 }
 
-function InformacionAdicional({ torneo }: { torneo: Detalle }) {
+function Entradas({ torneos, resumen }: { torneos: TorneoDetalle[]; resumen: ResumenEvento }) {
+  return (
+    <section aria-labelledby="unete" className="w-full rounded-[20px] bg-tarjeta p-6 font-display italic tracking-wide lg:px-11 lg:py-6 lg:text-2xl">
+      <h2 id="unete">Únete al evento</h2>
+      <dl className="mt-8 space-y-4">
+        <div>
+          <dt className="inline">Fecha:</dt> <dd className="inline">{resumen.fecha}</dd>
+        </div>
+        <div>
+          <dt className="inline">Horario:</dt> <dd className="inline">{resumen.horario}</dd>
+        </div>
+      </dl>
+      <hr className="my-6 border-borde" />
+      <h3>Entradas</h3>
+      <dl className="mt-3 space-y-3">
+        {[...MODALIDADES].reverse().map((modalidad) => (
+          <div key={modalidad.tipo}>
+            <dt>{modalidad.entrada}</dt>
+            <dd className="pl-2">{precioDesde(torneos, modalidad.tipo) ?? 'No disponible'}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+}
+
+function InformacionAdicional({ resumen }: { resumen: ResumenEvento }) {
   return (
     <section className="text-lg leading-relaxed lg:text-2xl">
       <h2 className="text-2xl font-bold lg:text-3xl">Información Adicional</h2>
       <dl className="mt-6 space-y-1">
-        <Dato titulo="Evento">
-          {torneo.nombre} – {torneo.juego}
-        </Dato>
-        <Dato titulo="Lugar">{torneo.lugar ?? 'Por confirmar'}</Dato>
+        <Dato titulo="Evento">Anarkia Games – Competencias de videojuegos</Dato>
+        <Dato titulo="Lugar">{resumen.lugar}</Dato>
         <Dato titulo="Duración" icono="📅">
-          {torneo.duracionHoras ? `${torneo.duracionHoras} hrs` : 'Por confirmar'}
+          {resumen.duracion}
         </Dato>
         <Dato titulo="Público recomendado" icono="👥">
           Apto para todas las edades (menores acompañados de un adulto)
@@ -88,68 +120,6 @@ function Dato({ titulo, icono, children }: { titulo: string; icono?: string; chi
         {titulo}:
       </dt>{' '}
       <dd className="inline">{children}</dd>
-    </div>
-  )
-}
-
-function Entradas({ torneo }: { torneo: Detalle }) {
-  const tipos = [...torneo.tiposTicket].sort((a, b) => a.tipo.localeCompare(b.tipo))
-
-  return (
-    <section aria-labelledby="unete" className="w-full rounded-[20px] bg-tarjeta p-6 font-display italic tracking-wide lg:px-11 lg:py-6 lg:text-2xl">
-      <h2 id="unete">Únete al evento</h2>
-      <dl className="mt-8 space-y-4">
-        <div>
-          <dt className="inline">Fecha:</dt> <dd className="inline">{formatearFecha(torneo.fechaInicio)}</dd>
-        </div>
-        <div>
-          <dt className="inline">Horario:</dt> <dd className="inline">{formatearHora(torneo.fechaInicio)}</dd>
-        </div>
-      </dl>
-      <hr className="my-6 border-borde" />
-      <h3>Entradas</h3>
-      {tipos.length === 0 ? (
-        <p className="mt-3 font-body not-italic text-white/70">Las entradas aún no están a la venta.</p>
-      ) : (
-        <dl className="mt-3 space-y-3">
-          {tipos.map((tipo) => (
-            <div key={tipo.id}>
-              <dt>{NOMBRE_TIPO[tipo.tipo]}</dt>
-              <dd className="pl-2">
-                {formatearSoles(tipo.precio)}
-                <span className="ml-3 font-body text-sm not-italic text-white/60">
-                  {tipo.disponibles > 0 ? `${tipo.disponibles} disponibles` : 'Agotado'}
-                </span>
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </section>
-  )
-}
-
-function EleccionTicket({ torneo }: { torneo: Detalle }) {
-  const hayCupos = torneo.tiposTicket.some((tipo) => tipo.disponibles > 0)
-  const motivo =
-    torneo.estado === 'CANCELADO'
-      ? 'Este torneo fue cancelado.'
-      : !ventaAbierta(torneo)
-        ? 'La venta de tickets ya cerró.'
-        : !hayCupos
-          ? 'No quedan tickets disponibles.'
-          : null
-
-  return (
-    <div className="flex flex-col items-center gap-4 text-center">
-      <p className="text-xl lg:text-[27px]">{motivo ?? 'Elige tu ticket aquí'}</p>
-      {motivo ? (
-        <span className={`${botonDeshabilitado} w-72 lg:text-[32px]`}>Elegir ticket</span>
-      ) : (
-        <Link to={`/torneos/${torneo.id}/modalidad`} className={`${botonVerde} w-72 lg:text-[32px]`}>
-          Elegir ticket
-        </Link>
-      )}
     </div>
   )
 }

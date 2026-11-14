@@ -1,34 +1,52 @@
-import { Link } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { useTorneos } from '../api/torneos'
-import type { Torneo } from '../api/tipos'
+import type { TorneoDetalle } from '../api/tipos'
 import { Cargando, ErrorCarga } from '../components/EstadoCarga'
 import { ImagenTorneo } from '../components/ImagenTorneo'
 import { botonDeshabilitado, botonVerde, contenedor } from '../components/estilos'
-import { formatearFecha, ventaAbierta } from '../utils/formato'
+import { sePuedeComprar, ticketDe } from '../tickets/evento'
+import { modalidadDe, type Modalidad } from '../tickets/modalidades'
+import { formatearFecha, formatearHora, formatearSoles, ventaAbierta } from '../utils/formato'
+import { NoEncontrado } from './NoEncontrado'
 
-/** Primero los torneos con venta abierta, por fecha; al final los que ya pasaron o se cancelaron. */
-function ordenar(torneos: Torneo[]) {
-  return [...torneos].sort(
-    (a, b) => Number(ventaAbierta(b)) - Number(ventaAbierta(a)) || a.fechaInicio.localeCompare(b.fechaInicio),
-  )
-}
-
-export function Torneos() {
+/** Paso 3 de la compra: torneos con tickets de la modalidad elegida (frame "Tickets - III" del Figma). */
+export function TicketsPorModalidad() {
+  const { modalidad: slug } = useParams()
+  const modalidad = modalidadDe(slug)
   const torneos = useTorneos()
 
+  if (!modalidad) return <NoEncontrado />
+
+  // Solo los torneos que ofrecen esa modalidad; primero los que se pueden comprar, por fecha.
+  const conTicket = (torneos.data ?? [])
+    .filter((torneo) => ticketDe(torneo, modalidad.tipo))
+    .sort(
+      (a, b) =>
+        Number(sePuedeComprar(b, modalidad.tipo)) - Number(sePuedeComprar(a, modalidad.tipo)) ||
+        a.fechaInicio.localeCompare(b.fechaInicio),
+    )
+
   return (
-    <section className={`${contenedor} py-16 lg:py-24`}>
-      <h1 className="sr-only">Torneos</h1>
-      {torneos.isPending && <Cargando texto="Cargando torneos…" />}
+    <section className={`${contenedor} py-12 lg:py-20`}>
+      <div className="mb-12 flex flex-wrap items-baseline justify-between gap-4 lg:px-8">
+        <h1 className="font-display text-3xl italic tracking-wide lg:text-5xl">Tickets de {modalidad.titulo.toLowerCase()}</h1>
+        <Link to="/tickets/modalidad" className="text-menta underline-offset-4 hover:underline">
+          Cambiar modalidad
+        </Link>
+      </div>
+
+      {torneos.isPending && <Cargando texto="Cargando tickets…" />}
       {torneos.isError && <ErrorCarga error={torneos.error} />}
-      {torneos.isSuccess && torneos.data.length === 0 && (
-        <p className="py-24 text-center text-lg text-white/70">Todavía no hay torneos publicados. ¡Vuelve pronto!</p>
+      {torneos.isSuccess && conTicket.length === 0 && (
+        <p className="py-24 text-center text-lg text-white/70">
+          Todavía no hay torneos con tickets de {modalidad.titulo.toLowerCase()}. ¡Vuelve pronto!
+        </p>
       )}
       {torneos.isSuccess && (
         <ul className="flex flex-col gap-14 lg:gap-20">
-          {ordenar(torneos.data).map((torneo) => (
+          {conTicket.map((torneo) => (
             <li key={torneo.id}>
-              <TarjetaTorneo torneo={torneo} />
+              <TarjetaTicket torneo={torneo} modalidad={modalidad} />
             </li>
           ))}
         </ul>
@@ -37,8 +55,10 @@ export function Torneos() {
   )
 }
 
-function TarjetaTorneo({ torneo }: { torneo: Torneo }) {
-  const abierta = ventaAbierta(torneo)
+function TarjetaTicket({ torneo, modalidad }: { torneo: TorneoDetalle; modalidad: Modalidad }) {
+  const ticket = ticketDe(torneo, modalidad.tipo)!
+  const cerrado =
+    torneo.estado === 'CANCELADO' ? 'Cancelado' : !ventaAbierta(torneo) ? 'Venta cerrada' : ticket.disponibles <= 0 ? 'Agotado' : null
 
   return (
     <article aria-labelledby={`torneo-${torneo.id}`}>
@@ -52,18 +72,20 @@ function TarjetaTorneo({ torneo }: { torneo: Torneo }) {
             {torneo.descripcion ?? `Participa en el torneo de ${torneo.juego}.`}
           </p>
           <p className="text-sm text-white/60">
-            {torneo.juego} · {formatearFecha(torneo.fechaInicio)}
+            {formatearFecha(torneo.fechaInicio)} · {formatearHora(torneo.fechaInicio)}
             {torneo.lugar && ` · ${torneo.lugar}`}
           </p>
+          <p className="font-display text-xl italic tracking-wide">
+            {formatearSoles(ticket.precio)}
+            {!cerrado && <span className="ml-3 font-body text-sm not-italic text-white/60">{ticket.disponibles} disponibles</span>}
+          </p>
         </div>
-        {abierta ? (
-          <Link to={`/torneos/${torneo.id}`} className={`${botonVerde} md:w-64 lg:w-72`}>
+        {cerrado ? (
+          <span className={`${botonDeshabilitado} md:w-64 lg:w-72`}>{cerrado}</span>
+        ) : (
+          <Link to={`/tickets/${modalidad.slug}/${torneo.id}`} className={`${botonVerde} md:w-64 lg:w-72`}>
             Comprar ahora
           </Link>
-        ) : (
-          <span className={`${botonDeshabilitado} md:w-64 lg:w-72`}>
-            {torneo.estado === 'CANCELADO' ? 'Cancelado' : 'Venta cerrada'}
-          </span>
         )}
       </div>
     </article>

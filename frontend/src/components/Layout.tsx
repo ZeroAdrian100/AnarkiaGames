@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router'
+import { Outlet, ScrollRestoration } from 'react-router'
 import { Footer } from './Footer'
 import { Header } from './Header'
 
@@ -10,6 +10,8 @@ export function Layout() {
         <Outlet />
       </main>
       <Footer />
+      {/* Al cambiar de página vuelve arriba; al ir atrás, recupera la posición anterior. */}
+      <ScrollRestoration />
     </div>
   )
 }
