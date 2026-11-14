@@ -58,6 +58,9 @@ class CompraIntegrationTest {
                 {"tipo":"ESPECTADOR","cantidad":2,"tokenId":"tok_ok"}""")
                 .andExpect(status().isCreated());
 
+        mvc.perform(get("/torneos"))
+                .andExpect(jsonPath("$[?(@.id == %d)].tiposTicket[?(@.tipo == 'ESPECTADOR')].disponibles".formatted(torneoId))
+                        .value(contains(5)));
         mvc.perform(get("/torneos/" + torneoId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tiposTicket[?(@.tipo == 'ESPECTADOR')].disponibles").value(contains(5)))
